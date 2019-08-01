@@ -1,0 +1,698 @@
+# https://github.com/cover-me/repository/tree/master/klayout
+# 20190720
+# how to use: copy .rbm file to \AppData\Roaming\KLayout (64bit), Klayout version: 0.24.9, find scripts in 'Tools' menu
+class MenuAction < RBA::Action
+  def initialize( title, shortcut, &action ) 
+    self.title = title
+    self.shortcut = shortcut
+    @action = action
+  end
+  def triggered 
+    @action.call( self ) 
+  end
+private
+  @action
+end
+
+# modified from https://www.klayout.de/forum/comments.php?DiscussionID=894
+# Separate inside/outside of mask
+$separate_wit_mask = MenuAction.new("Separate with mask(1st) to L51L52", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = nil
+  lp_a = nil
+  lp_b = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 51
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 52
+      lp_b = lp.layer_index
+    end
+    iter.next
+  end
+  (lp_a && lp_b) || raise("Missing layer 51 or 52!")
+  mask = RBA::Region::new
+  mask2 = RBA::Region::new
+  subjects = RBA::Region::new
+  shapes_to_delete = []
+  lv.each_object_selected do |obj|
+    if obj.shape.is_box? || obj.shape.is_polygon? || obj.shape.is_path?
+      poly = obj.shape.polygon
+      if obj.seq == 0 #first object?
+        poly = poly.bbox
+        overlap = poly.height > 50000?5000:poly.height*0.04
+        poly1 = RBA::Box::new(poly.left,poly.bottom,poly.right,poly.top)
+        mask.insert(poly1)
+        poly2 = RBA::Box::new(poly1.left+overlap,poly1.bottom+overlap,poly1.right-overlap,poly1.top-overlap)
+        mask2.insert(poly2)
+        cv_index ||= obj.cv_index
+      else
+        subjects.insert(poly)
+        shapes_to_delete << obj.shape
+      end
+    end
+  end
+  cv_index || raise("No objects selected")
+  subjects.is_empty? && raise("Only one selection")
+  begin 
+    lv.transaction("Separate with mask(1st) to L51L52")  
+    inside  = subjects & mask
+    outside = subjects - mask2
+    lv.cellview(cv_index).cell.shapes(lp_a).insert(inside)
+    lv.cellview(cv_index).cell.shapes(lp_b).insert(outside)
+    shapes_to_delete.each do |s|
+      s.delete
+    end
+  ensure
+    lv.commit
+  end
+end
+
+$patches_for_wf = MenuAction.new("Patches for L51(to L53, 100 um WF)", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = 0
+  lp_a = nil
+  lp_b = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 51
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 53
+      lp_b = lp.layer_index
+    end
+    iter.next
+  end
+  (lp_a && lp_b) || raise("Missing layer 51 or 53!")
+  mask = RBA::Region::new
+  subjects = RBA::Region::new
+  lv.cellview(cv_index).cell.shapes(lp_a).each do |shape|#51 layer
+    cv_index ||= obj.cv_index
+    subjects.insert(shape.polygon)
+  end
+  cv_index || raise("No objects in layer51!")
+  wf_len = 100000
+  pat_width = 5000
+  dx = (wf_len-pat_width)/2
+  b_left = subjects.bbox.left/wf_len*wf_len-wf_len#choose a boundary divisible by wf_len
+  b_right = subjects.bbox.right/wf_len*wf_len+wf_len
+  b_top = subjects.bbox.top/wf_len*wf_len+wf_len
+  b_bottom = subjects.bbox.bottom/wf_len*wf_len-wf_len
+  x = b_left + wf_len/2
+  while x<b_right
+    y = b_bottom + wf_len/2
+    while y<b_top
+      mask.insert(RBA::Box::new(x-dx,y-dx,x+dx,y+dx))
+      y += wf_len
+    end
+    x += wf_len
+  end
+  begin 
+    lv.transaction("Patches for L51(to L53, 100 um WF)")  
+    patches_100  = subjects - mask
+    lv.cellview(cv_index).cell.shapes(lp_b).insert(patches_100)
+  ensure
+    lv.commit
+  end
+end
+
+$join_remote_poly = MenuAction.new("Join remote polygon", "" ) do
+  layer = nil
+  cv_index = nil
+  p0 = nil
+  p1 = nil
+  shapes_to_delete = []
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  lv.each_object_selected do |obj|
+    if obj.shape.is_box? || obj.shape.is_polygon? || obj.shape.is_path?
+      poly = obj.shape.polygon
+      if obj.seq == 0
+        cv_index ||= obj.cv_index
+        layer ||= obj.layer
+        p0 = poly
+      elsif obj.seq == 1
+        p1 = poly
+      else
+        raise("More than two selections!")
+      end
+      shapes_to_delete << obj.shape
+    end
+  end
+  pt_nearest_0 = nil
+  pt_nearest_1 = nil
+  d_min = 100000*100
+  p0.each_point_hull do |pt0|
+    p1.each_point_hull do |pt1|
+      d_ = pt0.distance(pt1)
+      if d_<d_min
+        d_min = d_
+        pt_nearest_0 = pt0
+        pt_nearest_1 = pt1
+      end
+    end
+  end
+  pt_nearest_2 = nil
+  pt_nearest_3 = nil
+  d_min = 100000*100
+  p0.each_point_hull do |pt0|
+    p1.each_point_hull do |pt1|
+      d_ = pt0.distance(pt1)
+      if d_<d_min && pt0!=pt_nearest_0 && pt1!=pt_nearest_1
+        d_min = d_
+        pt_nearest_2 = pt0
+        pt_nearest_3 = pt1
+      end
+    end
+  end
+  rgn = RBA::Region::new(RBA::Polygon::new([pt_nearest_0,pt_nearest_1,pt_nearest_2,pt_nearest_3]))
+  rgn = rgn|RBA::Region::new(RBA::Polygon::new([pt_nearest_0,pt_nearest_1,pt_nearest_3,pt_nearest_2]))
+  rgn = rgn|RBA::Region::new(p0)
+  rgn = rgn|RBA::Region::new(p1)
+  begin 
+    lv.transaction("join_remote_polygon")  
+    lv.cellview(cv_index).cell.shapes(layer).insert(rgn)
+    shapes_to_delete.each do |s|
+      s.delete
+    end
+  ensure
+    lv.commit
+  end
+end
+
+$cut_by_masks = MenuAction.new("Separate L51 with selected masks (to L51 L52)", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = nil
+  lp_a = nil
+  lp_b = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 51
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 52
+      lp_b = lp.layer_index
+    end
+    iter.next
+  end
+  (lp_a && lp_b) || raise("Missing layer 51 or 52!")
+  mask = RBA::Region::new
+  subjects = RBA::Region::new
+  shapes_to_delete = []
+  lv.each_object_selected do |obj|
+    if obj.shape.is_box? || obj.shape.is_polygon? || obj.shape.is_path?
+      poly = obj.shape.polygon.bbox
+      polyM = RBA::Box::new(poly.left,poly.bottom,poly.right,poly.top)
+      mask.insert(polyM)
+      cv_index ||= obj.cv_index
+    end
+  end
+  cv_index || raise("No mask selected")
+  lv.cellview(cv_index).cell.shapes(lp_a).each do |shape|#51 layer
+    if shape.is_box? || shape.is_polygon? || shape.is_path?
+      poly = shape.polygon
+      subjects.insert(poly)
+      shapes_to_delete << shape
+    end
+  end
+  subjects.is_empty? && raise("51 layer is empty!")
+  begin 
+    lv.transaction("Separate_L51_with_masks")  
+    inside  = subjects & mask
+    outside = subjects - mask
+    lv.cellview(cv_index).cell.shapes(lp_a).insert(inside)#layer51
+    lv.cellview(cv_index).cell.shapes(lp_b).insert(outside)#layer52
+    shapes_to_delete.each do |s|
+      s.delete
+    end
+  ensure
+    lv.commit
+  end
+end
+
+$rp_by_mask = MenuAction.new("Remove points by mask(2nd)", "" ) do
+  layer = nil
+  cv_index = nil
+  p_mask = nil
+  p0 = nil
+  shapes_to_delete = []
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  lv.each_object_selected do |obj|
+    if obj.shape.is_box? || obj.shape.is_polygon? || obj.shape.is_path?
+      poly = obj.shape.polygon
+      if obj.seq == 0
+        cv_index ||= obj.cv_index
+        layer ||= obj.layer
+        p0 = poly
+      elsif obj.seq == 1
+        p_mask = poly
+      else
+        raise("More than two selections!")
+      end
+    shapes_to_delete << obj.shape
+    end
+  end
+  (p_mask && p0) || raise("Need two selections!")
+  new_hull = []
+  p0.each_point_hull do |pt|
+    if !p_mask.inside?(pt)
+      new_hull << pt
+    end
+  end
+  begin 
+    lv.transaction("Remove points by mask")  
+    lv.cellview(cv_index).cell.shapes(layer).insert(RBA::Polygon::new(new_hull))
+    shapes_to_delete.each do |s|
+      s.delete
+    end
+  ensure
+    lv.commit
+  end
+end
+
+$compute_total_area = MenuAction.new( "Total area of selected shapes", "" ) do 
+  app = RBA::Application.instance
+  mw = app.main_window
+  lv = mw.current_view
+  if lv == nil
+    raise "No view selected"
+  end
+  total_area = 0.0
+  lv.each_object_selected do |obj|
+    shape = obj.shape
+    layout = lv.cellview(obj.cv_index).layout
+    if shape.is_polygon? || shape.is_box? || shape.is_path?
+      polygon = shape.polygon
+      a = polygon.area
+      m = obj.trans.mag * layout.dbu
+      total_area += a * m * m
+    end
+  end
+  RBA::MessageBox.info("Total area", "Total area: #{total_area} um^2. takes #{total_area/1000} s for 1 nA and 100 uC/cm^2", RBA::MessageBox.b_ok)
+end
+
+$auto_add_ctc = MenuAction.new( "Auto add contacts", "" ) do 
+  # modified from http://www.klayout.org/svn-public/klayout-resources/trunk/scripts/scale_anisotropic.lym
+  app = RBA::Application::instance
+  app.is_editable? || raise("KLayout must be run in editable mode to use this macro")
+  mw = app.main_window
+  view = mw.current_view
+  view || raise("No view open")
+  layer = nil
+  cv_index = nil
+  pth = nil
+  v1 = nil
+  v2 = nil
+  view.each_object_selected do |obj|
+    if obj.seq == 0 && obj.shape.is_path?
+      cv_index ||= obj.cv_index
+      layer ||= obj.layer
+      pth = obj.shape
+    else
+      raise("Need one selection and it should be a path!")
+    end
+  end
+  pth || raise("No selection!")
+  k = 0
+  pth.each_point do |v|
+    if k == 0
+      v1 = v
+    end
+    if k == 1
+      v2 = v
+    end
+    if k>1
+      raise("Path should have only two points!")
+    end
+    k += 1
+  end
+  # ask for the scaling factors
+  text = RBA::InputDialog::ask_string("Enter parameters in um", "head/tail/space/number/degree([0,360), beyond means perpendicular)", "0/10/0.7/3/360")
+  text || raise('Empty parameter string!')
+  f = text.split("/")
+  f.size == 5 || raise("Parameter number error!")
+  f = f.collect { |n| n.to_f*1000.0}
+  f[3] = f[3]/1000.0
+  f[4] = f[4]/1000.0
+  v_m = (v2 + v1) * 0.5
+  v_dlt = v2 - v1
+  if f[4] >= 360.0 || f[4] < 0.0
+    v_perp = RBA::Point::new(-v_dlt.y,v_dlt.x)
+    v_dlt = v_dlt * (f[2] / v_dlt.abs)
+  else
+    f[4] = f[4]*Math::PI/180.0
+    v_perp = RBA::Point::new(Math.cos(f[4])*1000.0,Math.sin(f[4])*1000.0)
+    sin_theta = (v_dlt.x*v_perp.y-v_perp.x*v_dlt.y)/v_dlt.abs/v_perp.abs
+    sin_theta = sin_theta.abs
+    sin_theta == 0.0 && raise("Zero included angle!")
+    v_dlt = v_dlt * (f[2]/sin_theta/ v_dlt.abs)
+  end
+  k = -(f[3]-1.0)/2.0
+  pathes_to_add = []
+  while k<= (f[3]-1.0)/2.0 do
+    v = v_m + v_dlt*k
+    pathes_to_add << RBA::Path::new([v+v_perp*(f[0]/v_perp.abs),v-v_perp*(f[1]/v_perp.abs)],pth.path_width)
+    k += 1
+  end
+  # begin the transaction (undo/redo support)
+  view.transaction("Auto Contacts")
+  begin
+    pathes_to_add.each do |p|
+      view.cellview(cv_index).cell.shapes(layer).insert(p)
+    end
+    pth.delete
+  ensure
+    view.commit
+  end
+end
+$auto_add_ctc2 = MenuAction.new( "Auto add contacts (two tails)", "" ) do 
+  # modified from http://www.klayout.org/svn-public/klayout-resources/trunk/scripts/scale_anisotropic.lym
+  app = RBA::Application::instance
+  app.is_editable? || raise("KLayout must be run in editable mode to use this macro")
+  mw = app.main_window
+  view = mw.current_view
+  view || raise("No view open")
+  layer = nil
+  cv_index = nil
+  pth = nil
+  v1 = nil
+  v2 = nil
+  view.each_object_selected do |obj|
+    if obj.seq == 0 && obj.shape.is_path?
+      cv_index ||= obj.cv_index
+      layer ||= obj.layer
+      pth = obj.shape
+    else
+      raise("Need one selection and it should be a path!")
+    end
+  end
+  pth || raise("No selection!")
+  k = 0
+  pth.each_point do |v|
+    if k == 0
+      v1 = v
+    end
+    if k == 1
+      v2 = v
+    end
+    if k>1
+      raise("Path should have only two points!")
+    end
+    k += 1
+  end
+  # ask for the scaling factors
+  text = RBA::InputDialog::ask_string("Enter parameters in um", "head/tail/space/number/degree([0,360), beyond means perpendicular)/tail2/theta2", "0/5/0.7/3/360/3/30")
+  text || raise('Empty parameter string!')
+  f = text.split("/")
+  f.size == 7 || raise("Parameter number error!")
+  f = f.collect { |n| n.to_f*1000.0}
+  f[3] = f[3]/1000.0
+  f[4] = f[4]/1000.0
+  f[6] = f[6]/1000.0*Math::PI/180.0
+  v_m = (v2 + v1) * 0.5
+  v_dlt = v2 - v1
+  if f[4] >= 360.0 || f[4] < 0.0
+    v_perp = RBA::Point::new(-v_dlt.y,v_dlt.x)
+    v_dlt = v_dlt * (f[2] / v_dlt.abs)
+  else
+    f[4] = f[4]*Math::PI/180.0
+    v_perp = RBA::Point::new(Math.cos(f[4])*1000.0,Math.sin(f[4])*1000.0)
+    sin_theta = (v_dlt.x*v_perp.y-v_perp.x*v_dlt.y)/v_dlt.abs/v_perp.abs
+    sin_theta = sin_theta.abs
+    sin_theta == 0.0 && raise("Zero included angle!")
+    v_dlt = v_dlt * (f[2]/sin_theta/ v_dlt.abs)
+  end
+  k = -(f[3]-1.0)/2.0
+  pathes_to_add = []
+  t2_e = f[6]/(f[3]-1.0)*2.0
+  while k<= (f[3]-1.0)/2.0 do
+    v = v_m + v_dlt*k
+    v_head = v+v_perp*(f[0]/v_perp.abs)
+    v_tail = v-v_perp*(f[1]/v_perp.abs)
+    t2 = t2_e*k
+    sin_t2 = Math.sin(t2)
+    cos_t2 = Math.cos(t2)
+    v_tail2 = v_tail-RBA::Point::new(v_perp.x*cos_t2-v_perp.y*sin_t2,v_perp.x*sin_t2+v_perp.y*cos_t2)*(f[5]/v_perp.abs)
+    pathes_to_add << RBA::Path::new([v_head,v_tail,v_tail2],pth.path_width)
+    k += 1
+  end
+  # begin the transaction (undo/redo support)
+  view.transaction("Auto Contacts")
+  begin
+    pathes_to_add.each do |p|
+      view.cellview(cv_index).cell.shapes(layer).insert(p)
+    end
+    pth.delete
+  ensure
+    view.commit
+  end
+end
+
+$generate_gates = MenuAction.new( "Generate gates", "" ) do 
+  app = RBA::Application::instance
+  app.is_editable? || raise("KLayout must be run in editable mode to use this macro")
+  mw = app.main_window
+  view = mw.current_view
+  view || raise("No view open")
+  layer = nil
+  cv_index = nil
+  pth = nil
+  v1 = nil
+  v2 = nil
+  view.each_object_selected do |obj|
+    if obj.seq == 0 && obj.shape.is_path?
+      cv_index ||= obj.cv_index
+      layer ||= obj.layer
+      pth = obj.shape
+    else
+      raise("Need one selection and it should be a path!")
+    end
+  end
+  pth || raise("No selection!")
+  k = 0
+  pathes_to_add = []
+  pth.each_point do |v|
+    if k == 0
+      v1 = v
+    end
+    if k == 1
+      v2 = v
+    end
+    if k>1
+      raise("Path should have only two points!")
+    end
+    k += 1
+  end
+  # ask for the scaling factors
+  text = RBA::InputDialog::ask_string("Enter parameters in um", "period/half_number/length/shift_h/theta_max/ratio/tail1/t1_width/tail2/t2_width/tail3/t3_width", "0.04/50/7/0.5/80/0.5/5/0.03/8/0.15/0.3/0.3")
+  text || raise('Empty parameter string!')
+  f = text.split("/")
+  f.size == 12 || raise("Parameter number error!")
+  f = f.collect { |n| n.to_f*1000.0}
+  f[1] = f[1]/1000.0*2 #number of gates
+  f[4] = f[4]/1000.0*Math::PI/180.0 #max theta
+  f[5] = f[5]/1000.0 #ratio
+  v_m = (v2 + v1) * 0.5 #center point
+  v_dlt = RBA::Point::new(0,f[0]) #period
+  t_delta = f[4]/(f[1]-1.0)*2.0 #delta theta
+  len = f[2]
+  
+  k = -(f[1]-1.0)/2.0
+  kk = 1
+  r = -k
+  while k<= r do
+    v = v_m + v_dlt*k - RBA::Point::new(f[3]/2.0*kk,0)#center of this gate
+    v1 = v+RBA::Point::new(len/2.0*kk,0)
+    v2 = v-RBA::Point::new(len/2.0*kk,0)
+    v2_ext = v2 -RBA::Point::new(Math.sqrt(r**2-(0.5*kk+k)**2)*f[0]*f[5]*kk,0)
+    t1 = t_delta*k
+    sin_t = Math.sin(t1)
+    cos_t = Math.cos(t1)
+	rk = RBA::Point::new(-cos_t*kk*f[6],sin_t*f[6])#direction vector
+    v3 = v_m - RBA::Point::new((f[2]+f[3])/2.0*kk,0) + rk
+    rk = RBA::Point::new(-cos_t*kk*f[8],sin_t*f[8])
+    v4 = v3 + rk
+    rk = RBA::Point::new(-cos_t*kk*f[10],sin_t*f[10])
+    v5 = v4 + rk
+    pathes_to_add << RBA::Path::new([v1,v2-RBA::Point::new(pth.path_width*kk,0)],pth.path_width)
+    rk = RBA::Point::new(-cos_t*kk*f[7],sin_t*f[7])
+    pathes_to_add << RBA::Path::new([v2,v2_ext,v3+rk],f[7])
+	if f[11]>0
+      rk = RBA::Point::new(-cos_t*kk*15,sin_t*15)
+	  pathes_to_add << RBA::Path::new([v3,v4+rk],f[9])
+	  pathes_to_add << RBA::Path::new([v4,v5],f[11])
+	else
+	  pathes_to_add << RBA::Path::new([v3,v4],f[9])
+	end
+    k += 1
+    kk *= -1
+  end
+  # begin the transaction (undo/redo support)
+  view.transaction("Generate gates")
+  begin
+    pathes_to_add.each do |p|
+      view.cellview(cv_index).cell.shapes(layer).insert(p)
+    end
+    pth.delete
+  ensure
+    view.commit
+  end
+end
+
+$markers_for_box = MenuAction.new("Add markers for boxes", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = nil  
+  makers = []
+  makers63 = []
+  lv.each_object_selected do |obj|
+    cv_index ||= obj.cv_index
+    if obj.shape.is_box?
+      x1 = obj.shape.box.left()+3000
+      x2 = obj.shape.box.right()-3000
+      y1 = obj.shape.box.bottom()+3000
+      y2 = obj.shape.box.top()-3000
+      makers<<RBA::Box::new(x1-25, y1-750, x1+25, y1+750)
+      makers<<RBA::Box::new(x1-25, y2-750, x1+25, y2+750)
+      makers<<RBA::Box::new(x2-25, y1-750, x2+25, y1+750)
+      makers<<RBA::Box::new(x2-25, y2-750, x2+25, y2+750)
+      makers<<RBA::Box::new(x1-750, y1-25, x1+750, y1+25)
+      makers<<RBA::Box::new(x1-750, y2-25, x1+750, y2+25)
+      makers<<RBA::Box::new(x2-750, y1-25, x2+750, y1+25)
+      makers<<RBA::Box::new(x2-750, y2-25, x2+750, y2+25)
+      makers63<<RBA::Box::new(x1-500, y1-500, x1+500, y1+500)
+      makers63<<RBA::Box::new(x1-500, y2-500, x1+500, y2+500)
+      makers63<<RBA::Box::new(x2-500, y1-500, x2+500, y1+500)
+      makers63<<RBA::Box::new(x2-500, y2-500, x2+500, y2+500)
+    end    
+  end
+  cv_index || raise("No objects selected")
+  lp_a = nil
+  lp_63 = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 52
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 63
+      lp_63 = lp.layer_index
+    end    
+    iter.next
+  end
+  (lp_a && lp_63) || raise("Please create layer 52 and 63 for the markers!")
+  # begin the transaction (undo/redo support)
+  lv.transaction("Add markers for boxes")
+  begin
+    makers.each do |p|
+      lv.cellview(cv_index).cell.shapes(lp_a).insert(p)
+    end
+    makers63.each do |p|
+      lv.cellview(cv_index).cell.shapes(lp_63).insert(p)
+    end
+  ensure
+    lv.commit
+  end
+end
+
+$toLeads = MenuAction.new("Pathes to Leads", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = nil  
+  pathes_to_add = []
+  shapes_to_delete = []
+  text = RBA::InputDialog::ask_string("Enter parameters in um", "width1/len1/width2/len2.../widthn/lenn (last len is ignored)", "0.5/10/1/20/2/80/4/0")
+  text || raise('Empty parameter string!')
+  f = text.split("/")
+  f.size%2 == 0 || raise("Parameters come in pairs!")
+  f = f.collect { |n| n.to_f*1000.0}
+  lv.each_object_selected do |obj|
+    cv_index ||= obj.cv_index
+    if obj.shape.is_path?
+      shapes_to_delete << obj.shape
+      p_length = 0
+      pts = []
+      ii = 0
+      width = f[0]
+      obj.shape.each_point do |v|
+        pts << v
+        if pts.length > 1
+          sec_len = Math.sqrt(pts[-1].sq_distance(pts[-2]))
+          i = 0
+          loop do
+            if p_length<f[i+1] and p_length + sec_len>=f[i+1]
+              width = f[i]
+              v0 = pts[-2] + (pts[-1] - pts[-2])*((f[i+1]-p_length)*(1.0/sec_len))
+              v00 = v0 + (pts[-1] - pts[-2])*(500.0/sec_len)
+              temp = pts[-1]
+              pts[-1] = v00
+              pathes_to_add << RBA::Path::new(pts,f[i])
+              p_length = f[i+1]
+              sec_len = Math.sqrt(v0.sq_distance(temp))
+              pts = [v0]
+              if sec_len > 0
+                pts << temp
+              end
+              ii = i + 2
+            end
+            i += 2
+            if i>f.size-4
+              break
+            end
+          end
+          p_length += sec_len
+        end
+      end
+      if pts.length > 1
+        pathes_to_add << RBA::Path::new(pts,f[ii])
+      end
+    end    
+  end 
+  cv_index || raise("No objects selected")
+  lp_a = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 51
+      lp_a = lp.layer_index
+    end
+    iter.next
+  end
+  lp_a || raise("Please create layer 51!")
+  # begin the transaction (undo/redo support)
+  lv.transaction("Pathes to Leads")
+  begin
+    pathes_to_add.each do |p|
+      lv.cellview(cv_index).cell.shapes(lp_a).insert(p)
+    end
+    shapes_to_delete.each do |s|
+      s.delete
+    end
+  ensure
+    lv.commit
+  end
+end
+
+app = RBA::Application.instance
+mw = app.main_window
+menu = mw.menu
+menu.insert_separator("tools_menu.end", "EBL")
+menu.insert_item("tools_menu.end", "Pathes_to_Leads", $toLeads)
+menu.insert_item("tools_menu.end", "Patches_for_L51(to L53, 100 um WF)", $patches_for_wf)
+menu.insert_item("tools_menu.end", "Separate_L51_with_masks", $cut_by_masks)
+menu.insert_item("tools_menu.end", "Separate_with_mask(1st)_to_L51L52", $separate_wit_mask)
+menu.insert_item("tools_menu.end", "Remove_points_by_mask(2nd)", $rp_by_mask)
+menu.insert_item("tools_menu.end", "Auto_add_contacts", $auto_add_ctc)
+menu.insert_item("tools_menu.end", "Auto_add_contacts_2tails", $auto_add_ctc2)
+menu.insert_item("tools_menu.end", "join_remote_polygon", $join_remote_poly)
+menu.insert_item("tools_menu.end", "generate_gates", $generate_gates)
+menu.insert_item("tools_menu.end", "markers_for_box", $markers_for_box)
+menu.insert_item("tools_menu.end", "compute_total_area", $compute_total_area)

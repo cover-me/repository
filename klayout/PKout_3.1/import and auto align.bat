@@ -1,0 +1,1 @@
+C:\WinPython-32bit-2.7.9.5\python-2.7.9\python.exe "import and auto align.py"

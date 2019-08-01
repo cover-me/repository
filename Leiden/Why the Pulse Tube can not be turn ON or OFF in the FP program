@@ -1,0 +1,2 @@
+This is a bug for the FP program v4.19
+Reading a parameter works well. But the address for setting a pulse tube parameter is not initilaized unless the 'configration' is changed at the begginning.

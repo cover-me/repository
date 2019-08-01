@@ -1,0 +1,1 @@
+.\Python\python.exe ".\dr200 alarmer.py"
