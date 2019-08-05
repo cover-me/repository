@@ -3,18 +3,19 @@
 # what's new
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
+# 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 from numpy import linspace, zeros, shape, arange, repeat, allclose, vstack, empty, nan, meshgrid, save, load
 from lib.file_support.spyview import SpyView
 import qt
 import timetrack
 import sys
 import data as d
-import traces
 import os
 from time import time, strftime
 import socket
 from shutil import copyfile, rmtree
 from tempfile import mkdtemp
+import winsound
 class qtplot_client():
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
@@ -132,7 +133,13 @@ class easy_scan():
         if not os.path.isfile(qscan_copyto_path):
             print 'Copy file:', qscan_file_path
             copyfile(qscan_file_path,qscan_copyto_path)
-        traces.copy_script(this_file_path,data._dir,self._filename+str(self._generator._counter-1))# Copy the python script into the data folder
+        to_script_path = "%s\\%s_%s.py" % (data._dir,self._filename,str(self._generator._counter-1))
+        if os.path.isfile(this_file_path):
+            copyfile(this_file_path,to_script_path)
+        else:
+            f = open(to_script_path,'w')
+            f.write(this_file_path)#It maybe a string
+            f.close()
         data._file.flush()
         return data
     def _paraok_scan(self,a,b,c):
@@ -297,7 +304,7 @@ class easy_scan():
             return
         print '  %s \n'%('_'*(TERM_WIDTH-3)) +' (%s)\n'%('_'*(TERM_WIDTH-3))
         #send message to word
-        scanStr = "scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
+        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
         scanStr += "bwd=True, " if bwd else ''
@@ -325,19 +332,34 @@ class easy_scan():
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd,xswp_by_mchn)
+        winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
-        scanStr = "set(%s,%s)<return>"%(chan,val)
+        scanStr = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
                 g.set_val(i,val)
-        elif chan == 'ivvi_rate':
+        elif chan.endswith('_rate'):
+            chan0 = chan[:-5]
             delay = 30
             scanStr += ', %s ms'%delay
-            for i in ivvi.get_parameter_names():
-                ivvi.set_parameter_rate(i,val,delay)
+            if chan0 == 'ivvi':
+                for i in ivvi.get_parameter_names():
+                    ivvi.set_parameter_rate(i,val,delay)
+            elif g.is_dac_name(chan0):
+                    ivvi.set_parameter_rate(chan0,val,delay)
         else:
             g.set_val(chan,val)
-        self._sendToWord(scanStr)
+        self._sendToWord(scanStr+'<return>')
+    def more_scan(self,script_path):
+        global this_file_path
+        while os.path.isfile(script_path):
+            f = open(script_path,'r')
+            code_str = f.read()
+            f.close()
+            os.remove(script_path)
+            print '========= more scan =========\n%s\n============================='%code_str
+            this_file_path=code_str
+            exec(code_str)
 class get_set():
     '''get readings, set outputs'''
     def __init__(self):
@@ -359,6 +381,11 @@ class get_set():
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_P"))
                 self._rdchans.append(qt.instruments.get(a))
                 self._rdchans.append(qt.instruments.get(a))
+            elif a.startswith('[xy]lockin'):
+                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_X"))
+                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_Y"))
+                self._rdchans.append(qt.instruments.get(a[4:]))
+                self._rdchans.append(qt.instruments.get(a[4:]))
             else:
                 self._rdlabels.append('%s (%s)'%(a,b))
                 self._rdchans.append(qt.instruments.get(a))
@@ -375,13 +402,17 @@ class get_set():
             ch = self._rdchans[i]
             if lb.startswith('keithley'):
                 val.append(ch.get_readlastval())
-            elif lb.startswith('lockin_R'):#make sure to keep consistent with self._rdlabels
+            elif lb.startswith('lockin_R'):
                 val.append(ch.get_R())
-            elif lb.startswith('lockin_P'):#make sure to keep consistent with self._rdlabels
+            elif lb.startswith('lockin_P'):
                 val.append(ch.get_P())
+            elif lb.startswith('lockin_X'):
+                val.append(ch.get_X())
+            elif lb.startswith('lockin_Y'):
+                val.append(ch.get_Y())
             elif lb.startswith('Lakeshore'):
                 val.append(ch.get_kelvinA())
-            elif lb.startswith('LPR'):
+            elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
                 print 'cannot read channel: %s\n!!!'%ch
