@@ -3,7 +3,7 @@
 # what's new
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
-# 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
+# 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 from numpy import linspace, zeros, shape, arange, repeat, allclose, vstack, empty, nan, meshgrid, save, load
 from lib.file_support.spyview import SpyView
 import qt
@@ -369,26 +369,29 @@ class get_set():
         self._prcss_labels = ['time']
         self._prcss_list = []
         for a,b in instruments_to_read:
-            insObj = qt.instruments.get(a)._ins
-            if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
-                print 'visa_clear: %s'%a
-                qt.instruments.get(a)._ins._visainstrument.clear()#clear the buffer
-            if hasattr(qt.instruments.get(a),'get_all'):
-                print 'get_all:    ', a
-                qt.instruments.get(a).get_all()
             if a.startswith('lockin'):
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_R"))
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_P"))
-                self._rdchans.append(qt.instruments.get(a))
-                self._rdchans.append(qt.instruments.get(a))
+                chn = qt.instruments.get(a)
+                self._rdchans.append(chn)
+                self._rdchans.append(chn)
             elif a.startswith('[xy]lockin'):
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_X"))
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_Y"))
-                self._rdchans.append(qt.instruments.get(a[4:]))
-                self._rdchans.append(qt.instruments.get(a[4:]))
+                chn = qt.instruments.get(a[4:])
+                self._rdchans.append(chn)
+                self._rdchans.append(chn)
             else:
                 self._rdlabels.append('%s (%s)'%(a,b))
-                self._rdchans.append(qt.instruments.get(a))
+                chn = qt.instruments.get(a)                
+                self._rdchans.append(chn)
+            insObj = chn._ins
+            if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
+                print 'visa_clear:\t%s'%a
+                insObj._visainstrument.clear()#clear the buffer
+            if hasattr(chn,'get_all'):
+                print 'get_all:\t', a
+                chn.get_all()
         if not all(self._rdchans):
             print 'Some instruments you want to read has not been loaded by qtlab. No scan has been done.'
             sys.exit()
