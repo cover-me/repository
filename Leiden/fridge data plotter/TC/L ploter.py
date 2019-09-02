@@ -14,8 +14,8 @@ from matplotlib.ticker import EngFormatter
 ############# modifiy here ##############
 fp_key = ['Date', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Flow', 'MG0', 'MG1', 'MG2', 'MG3', 'MG4', 'MG5', 'PT on', 'W_in', 'W_out', 'He', 'Oil', 'P_low', 'P_high', 'PT current', 'State0', 'State1', 'State2']
 tc_key = ['Date1', 'Date2', 'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'I0', 'I1', 'I2', 'I3']
-ycol=3;ylabel=tc_key[ycol]
-ycol2=-1;ylabel2=tc_key[ycol2]
+ycol=13;ylabel=tc_key[ycol]
+ycol2=15;ylabel2=tc_key[ycol2]
 #########################################
 plt.subplots_adjust(bottom=0.2)
 plt.xticks(rotation=25)
@@ -33,10 +33,16 @@ for i in fns:
     if ".txt" in i or '.dat' in i:
         print i
         if ycol2>-1:
-            t,y,y2 = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol,ycol2),unpack=True)
+            try:
+                t,y,y2 = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol,ycol2),unpack=True)
+            except:
+                t,y,y2 = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol,ycol2),unpack=True,skiprows=4)
             plt.plot(t,y,'r.',label=ylabel)
             plt.plot(t,y2,'b.',label=ylabel2)
         else:
-            t,y = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol),unpack=True)
+            try:
+                t,y = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol),unpack=True)
+            except:
+                t,y = np.loadtxt(i,delimiter='\t',converters={0:md.datestr2num},usecols=(0,ycol),unpack=True,skiprows=4)
             plt.plot(t,y,'r-',label=ylabel)
 plt.show()
