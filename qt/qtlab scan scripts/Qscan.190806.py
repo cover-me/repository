@@ -1,17 +1,21 @@
 # A general scan script for qtlab
-# modified from sudc.py by Po 
+# modified from sudc.py by Po
+# what's new
+# 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
+# 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
+# 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 from numpy import linspace, zeros, shape, arange, repeat, allclose, vstack, empty, nan, meshgrid, save, load
 from lib.file_support.spyview import SpyView
 import qt
 import timetrack
 import sys
 import data as d
-import traces
 import os
 from time import time, strftime
 import socket
 from shutil import copyfile, rmtree
 from tempfile import mkdtemp
+import winsound
 class qtplot_client():
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
@@ -92,15 +96,16 @@ class easy_scan():
         progress_bar = '\r('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '\r(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
         print progress_bar[:TERM_WIDTH],
-    def _sendToWord(self,msg):
-        towordPath = r'..\NotetoWord\toWord.exe'
+    def _sendToWord(self,msg,addTimestamp=True):
+        towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
         if os.path.isfile(towordPath):
-            os.system('%s'%towordPath+' "%s"'%(strftime('%m/%d %H:%M, ')+msg))
+            _ = strftime('%m/%d %H:%M, ')+msg if addTimestamp else msg
+            os.system('%s'%towordPath+' "%s"'%_)
         else:
             print 'toWord: Can not find toWord.exe'
-    #generate data file, spyview file and copies the pyton script.
+    #generate data file, spyview file and copy the pyton script.
     def _create_data(self,
-                    x_vector,x_coordinate,x_parameter,#coordinate labels, parameter to specify a channel
+                    x_vector,x_coordinate,x_parameter,#coordinate: labels, parameter: the string that specifies a channel
                     y_vector,y_coordinate,y_parameter,
                     z_vector,z_coordinate,z_parameter,bwd=False):
         qt.Data.set_filename_generator(self._generator)
@@ -124,11 +129,17 @@ class easy_scan():
         data.create_file()#Create data file
         SpyView(data).write_meta_file()#Create spyview meta.txt file
         qscan_file_path = sys._getframe().f_code.co_filename
-        qscan_copy_path = os.path.join(data._dir,os.path.split(qscan_file_path)[1])
-        if not os.path.isfile(qscan_copy_path):
+        qscan_copyto_path = os.path.join(data._dir,os.path.split(qscan_file_path)[1])
+        if not os.path.isfile(qscan_copyto_path):
             print 'Copy file:', qscan_file_path
-            copyfile(qscan_file_path,qscan_copy_path)
-        traces.copy_script(this_file_path,data._dir,self._filename+str(self._generator._counter-1))# Copy the python script into the data folder
+            copyfile(qscan_file_path,qscan_copyto_path)
+        to_script_path = "%s\\%s_%s.py" % (data._dir,self._filename,str(self._generator._counter-1))
+        if os.path.isfile(this_file_path):
+            copyfile(this_file_path,to_script_path)
+        else:
+            f = open(to_script_path,'w')
+            f.write(this_file_path)#It maybe a string
+            f.close()
         data._file.flush()
         return data
     def _paraok_scan(self,a,b,c):
@@ -166,81 +177,111 @@ class easy_scan():
             print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in the instrument side may NOT stop after you stop or pause the program manually\n    output will be set to the last value in the first loop!!'
         #start
         qt.mstart()
+        t_scanstart = time() 
         data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
         counter = 0
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
-        qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
+        qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
         qclient.update_plot()
-        dfpath_bwd = data_bwd.get_filepath() if data_bwd else None
+        dfpath_bwd = data_bwd.get_filepath() if bwd else None
         if is_print_cmd:#print command for gnuplot
             self._print_gnucmd(dfpath,dfpath_bwd)
-        print 'start scanning: %d lines, %d points per line'%(numloops,xptlen)
-        print 'file name:', dfpath
-        print 'data labels:', self._coolabels + self._vallabels
+        print 'Start scanning: %d lines, %d points per line'%(numloops,xptlen)
+        print 'File path:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        print 'Labels:', self._coolabels + self._vallabels
         self.user_interrrupt = False
+        ############# scan #############
         try:
             # set z channel(s)
             for iz in arange(zptlen):
                 for i in arange(zlen):
                     g.set_val(zchan[i],zpnt[i][iz])
+                z_val0 = zpnt[0][iz]
                 # set y channel(s) and initialize x channel(s)
                 for iy in arange(yptlen):
                     [starttime, counter] = timetrack.start(counter)
                     for i in arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
+                    y_val0 = ypnt[0][iy]
                     for i in arange(xlen):
                         g.set_val(xchan[i],xpnt[i][0])
-                    #delay after setting x back to x[0]
+                    # delay after setting x back to x[0]
                     qt.msleep(delay1)
                     # sweep x channel(s)
-                    t0 = time()
                     is_fwd_now = True
+                    is1d = (numloops==1)
+                    t0 = time()
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
-                            ix = 0 if is_fwd_now else (xptlen-1)
-                            index_end = (xptlen-1) if is_fwd_now else 0#index of the last point in x sweep vector
-                            while -1 < ix < xptlen:
-                                #set x channel(s)
-                                for i in arange(xlen):
-                                    g.set_val(xchan[i],xpnt[i][index_end if xswp_by_mchn else ix])
-                                x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
-                                #delay before each data point
-                                if delay2>0:
-                                    qt.msleep(delay2)
-                                #take and log data
-                                datavalues = [x_val0,ypnt[0][iy],zpnt[0][iz]]+g.take_data()
-                                d_item.add_data_point(*datavalues)
-                                self._print_progress(1.*ix/xptlen,datavalues,is_fwd_now)
-                                if is_fwd_now:
-                                    qclient.add_data(datavalues)
-                                    qclient.update_plot()
-                                #change ix
-                                if xswp_by_mchn:
-                                    ix = 0 if xpnt[0][0]<=x_val0<=xpnt[0][-1] or xpnt[0][-1]<=x_val0<=xpnt[0][0] else -1
-                                else:
-                                    ix += 1 if is_fwd_now else -1
-                            d_item.new_block()
-                        is_fwd_now = False
+                            if is_fwd_now==False and is1d:
+                                print
+                                qclient.compare(data.get_data())
+                                qclient.close()
+                                qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
+                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt[0][::-1],ypnt[0][::-1])
+                                qclient.update_plot()
+                            self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            is_fwd_now = not is_fwd_now
                     print '\r'+' '*TERM_WIDTH+'\r%.1f, %.3f'%((time()-t0),(time()-t0)/xptlen),
                     timetrack.remainingtime(starttime,numloops,counter)# Calculate and print remaining scantime
             print
+        ############# end scan #############
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
-            print '\n\nuser interrupts using ctrl+c'
+            print '\n\nInterrupted by ctrl+c'
             self.user_interrrupt = True
         for d_item in data_loop:
             if d_item:
                 d_item._write_settings_file()# Overwrite the settings file created at the beginning, this ensures updating the sweep variable with the latest value
                 d_item.close_file()
-        qclient.compare(data.get_data())
+        if bwd==True and is1d:
+            qclient.compare(data_bwd.get_data())
+        else:
+            qclient.compare(data.get_data())
         qclient.close()
         qt.mend()
-        print 'scan finished safely'
+        t_scan = (time()-t_scanstart)/60
+        print 'Scan finished.'
+        dfname = data.get_filename().replace('.dat','')
+        dfname_bwd = '/%s'%data_bwd.get_filename().replace('.dat','') if data_bwd else ''
+        self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
         if self.user_interrrupt:
             sys.exit()
+    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
+        ix = 0 if is_fwd_now else (xptlen-1)
+        index_end = xptlen-1-ix
+        issweeping = False
+        while -1 < ix < xptlen:
+            #set xchans
+            if not issweeping:
+                if xswp_by_mchn:
+                    for i in arange(xlen):
+                        g.set_val(xchan[i],xpnt[i][index_end])
+                    issweeping = True
+                else:
+                    for i in arange(xlen):
+                        g.set_val(xchan[i],xpnt[i][ix])
+            #delay before each point
+            if delay2>0:
+                qt.msleep(delay2)
+            #get xchans
+            x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
+            #take and log data
+            datavalues = [x_val0,y_val0,z_val0]+g.take_data()
+            d_item.add_data_point(*datavalues)
+            self._print_progress(1.*ix/xptlen,datavalues,is_fwd_now)
+            if is_fwd_now or is1d:
+                qclient.add_data(datavalues)
+                qclient.update_plot()
+            #change ix
+            if xswp_by_mchn:
+                ix = 0 if xpnt[0][0]<=x_val0<=xpnt[0][-1] or xpnt[0][-1]<=x_val0<=xpnt[0][0] else -1
+            else:
+                ix += 1 if is_fwd_now else -1
+        d_item.new_block()
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
@@ -263,14 +304,15 @@ class easy_scan():
             return
         print '  %s \n'%('_'*(TERM_WIDTH-3)) +' (%s)\n'%('_'*(TERM_WIDTH-3))
         #send message to word
-        scanStr = "scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
+        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
-        self._sendToWord(scanStr+')')
+        scanStr += '), dly(%s,%s), rt(%s,%s,%s), '%(delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
+        self._sendToWord(scanStr)
         #generate points
         xchnum = len(xchan)
         xpnt = zeros((xchnum,xsteps+1))
@@ -290,19 +332,34 @@ class easy_scan():
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd,xswp_by_mchn)
+        winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
-        scanStr = "set(%s,%s)"%(chan,val)
+        scanStr = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
                 g.set_val(i,val)
-        elif chan == 'ivvi_rate':
+        elif chan.endswith('_rate'):
+            chan0 = chan[:-5]
             delay = 30
             scanStr += ', %s ms'%delay
-            for i in ivvi.get_parameter_names():
-                ivvi.set_parameter_rate(i,val,delay)
+            if chan0 == 'ivvi':
+                for i in ivvi.get_parameter_names():
+                    ivvi.set_parameter_rate(i,val,delay)
+            elif g.is_dac_name(chan0):
+                    ivvi.set_parameter_rate(chan0,val,delay)
         else:
             g.set_val(chan,val)
-        self._sendToWord(scanStr)
+        self._sendToWord(scanStr+'<return>')
+    def more_scan(self,script_path):
+        global this_file_path
+        while os.path.isfile(script_path):
+            f = open(script_path,'r')
+            code_str = f.read()
+            f.close()
+            os.remove(script_path)
+            print '========= more scan =========\n%s\n============================='%code_str
+            this_file_path=code_str
+            exec(code_str)
 class get_set():
     '''get readings, set outputs'''
     def __init__(self):
@@ -312,21 +369,29 @@ class get_set():
         self._prcss_labels = ['time']
         self._prcss_list = []
         for a,b in instruments_to_read:
-            insObj = qt.instruments.get(a)._ins
-            if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
-                print 'visa_clear: %s'%a
-                qt.instruments.get(a)._ins._visainstrument.clear()#clear the buffer
-            if hasattr(qt.instruments.get(a),'get_all'):
-                print 'get_all:    ', a
-                qt.instruments.get(a).get_all()
             if a.startswith('lockin'):
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_R"))
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_P"))
-                self._rdchans.append(qt.instruments.get(a))
-                self._rdchans.append(qt.instruments.get(a))
+                chn = qt.instruments.get(a)
+                self._rdchans.append(chn)
+                self._rdchans.append(chn)
+            elif a.startswith('[xy]lockin'):
+                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_X"))
+                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_Y"))
+                chn = qt.instruments.get(a[4:])
+                self._rdchans.append(chn)
+                self._rdchans.append(chn)
             else:
                 self._rdlabels.append('%s (%s)'%(a,b))
-                self._rdchans.append(qt.instruments.get(a))
+                chn = qt.instruments.get(a)                
+                self._rdchans.append(chn)
+            insObj = chn._ins
+            if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
+                print 'visa_clear:\t%s'%a
+                insObj._visainstrument.clear()#clear the buffer
+            if hasattr(chn,'get_all'):
+                print 'get_all:\t', a
+                chn.get_all()
         if not all(self._rdchans):
             print 'Some instruments you want to read has not been loaded by qtlab. No scan has been done.'
             sys.exit()
@@ -340,13 +405,17 @@ class get_set():
             ch = self._rdchans[i]
             if lb.startswith('keithley'):
                 val.append(ch.get_readlastval())
-            elif lb.startswith('lockin_R'):#make sure to keep consistent with self._rdlabels
+            elif lb.startswith('lockin_R'):
                 val.append(ch.get_R())
-            elif lb.startswith('lockin_P'):#make sure to keep consistent with self._rdlabels
+            elif lb.startswith('lockin_P'):
                 val.append(ch.get_P())
+            elif lb.startswith('lockin_X'):
+                val.append(ch.get_X())
+            elif lb.startswith('lockin_Y'):
+                val.append(ch.get_Y())
             elif lb.startswith('Lakeshore'):
                 val.append(ch.get_kelvinA())
-            elif lb.startswith('LPR'):
+            elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
                 print 'cannot read channel: %s\n!!!'%ch
@@ -361,23 +430,38 @@ class get_set():
         '''get values from an output channel, keep update with set_val!'''
         if self.is_dac_name(chan):
             return ivvi.get(chan)# 4.3 ms
-        elif chan == 'magnet':
+        elif chan == 'magnet' or chan == 'magnetX':
             return qt.instruments.get(chan).get_field()#same speed as magnet.get_field(), ~ 600 ms
         elif chan == 'Lakeshore':
             return qt.instruments.get(chan).get_kelvinA()
         elif chan == 'time':
             return time()-self.t0
     def set_val(self,chan,val):
-        '''set values of an output channel, keep update with get_val!'''
+        '''set values of an output channel, keep update with get_val and get_rate!'''
         if self.is_dac_name(chan):
             #print 'setting %s to %f'%(chan,val)
             return ivvi.set(chan,val)
-        elif chan == 'magnet':
+        elif chan == 'magnet' or chan == 'magnetX':
             #print 'setting B to %f'%(val)
             return qt.instruments.get(chan).set_field(val)
+        # elif chan == 'magnet_r_theta':better to write a driver
+            # t_rad = val2/180.*math.pi
+            # x = val*math.cos(t_rad)
+            # z = val*math.sin(t_rad)
+            # qt.instruments.get('magnetX').set_field(x)
+            # return qt.instruments.get('magnet').set_field(z)
         elif chan == 'Lakeshore':
             return qt.instruments.get(chan).set_setpoint1(val)
         return False
+    def get_rate(self,chan):
+        '''get rates from an output channel, keep update with set_val!'''
+        if self.is_dac_name(chan):
+            _ = ivvi.get_parameters()[chan]
+            return '%s/%s'%(_['maxstep'],_['stepdelay'])
+        elif chan == 'magnet' or chan == 'magnetX':
+            _ = qt.instruments.get(chan).get_rampRate()
+            return '%s'%_
+        return ''   
     ############## process data #####################
     def add_lockin_conductance(self,arg_dict):
         '''
@@ -403,7 +487,7 @@ class get_set():
             p_val.append(i['function'](i['arg'],val))
         return p_val
 
-def get_term_width():
+def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
     if a == 'Columns':
         return int(b)
