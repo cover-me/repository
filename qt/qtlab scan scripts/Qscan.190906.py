@@ -4,29 +4,27 @@
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
-from numpy import linspace, zeros, shape, arange, repeat, allclose, vstack, empty, nan, meshgrid, save, load
-from lib.file_support.spyview import SpyView
-import qt
-import timetrack
-import sys
+# 19.09.06 Press "ctrl+e" to exit safely
+import qt,timetrack,sys,os,socket,winsound,msvcrt
+import numpy as np
 import data as d
-import os
+from lib.file_support.spyview import SpyView
 from time import time, strftime
-import socket
 from shutil import copyfile, rmtree
 from tempfile import mkdtemp
-import winsound
+
 class qtplot_client():
+    '''A client for real-time plotting in qtplot'''
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
-        self.mmap2npy = mmap2npy #create .npy file or not
+        self.mmap2npy = mmap2npy #whether create mmap .npy file or not
         self.filepath = ''#.dat file path
         self.npy_path = ''
         self.lastfile = ''
         self.last_update_time = 0
-        self.mdata = None#mapped data from .npy file
-        self.counter = 0
-        self.interval = interval
+        self.mdata = None#mmap data which is plotted by qtplot
+        self.counter = 0#real-time row number
+        self.interval = interval#minimum refresh interval for qtplot
     def set_file(self,filepath,col=0,x_pts=[],y_pts=[]):
         if not self.mute:
             self.filepath = filepath
@@ -35,10 +33,10 @@ class qtplot_client():
                 meta_path = self.npy_path[:-3]+'meta.txt'
                 copyfile(filepath,meta_path)
                 row = len(x_pts) * len(y_pts)
-                m = empty((row,col))*nan
-                m[:,:2] = vstack(meshgrid(x_pts,y_pts)).reshape(2,-1).T
-                save(self.npy_path,m)
-                self.mdata = load(self.npy_path, mmap_mode='r+')
+                m = np.empty((row,col))*np.nan#data matrix
+                m[:,:2] = np.vstack(np.meshgrid(x_pts,y_pts)).reshape(2,-1).T
+                np.save(self.npy_path,m)
+                self.mdata = np.load(self.npy_path, mmap_mode='r+')
     def add_data(self,values):
         if (not self.mute) and self.mmap2npy:
             self.mdata[self.counter,:] = values
@@ -53,18 +51,18 @@ class qtplot_client():
                 if self.lastfile == filename:
                     sckt.send('REFR:%s'%filename)
                 else:
-                    print 'update qtplot with the new file ...',
+                    print 'Update qtplot with the new file ...',
                     self.lastfile = filename
                     sckt.send('FILE:%s;SHOW:'%filename)
                     print sckt.recv(128)
                 sckt.close()
             except Exception:
                 self.mute = True
-                print 'Socket failed. Mute client.'
+                print 'Socket failed. Mute qtplot client.'
     def compare(self,data):
         if (not self.mute) and self.mmap2npy:
             print 'Comparing .npy data and data ...',
-            is_equal =  allclose(self.mdata[:self.counter,:],data,rtol=1e-12,atol=0.)
+            is_equal =  np.allclose(self.mdata[:self.counter,:],data,rtol=1e-12,atol=0.)
             print '%s!'%is_equal
     def close(self):
         del self.mdata
@@ -78,24 +76,18 @@ class easy_scan():
     def __init__(self):
         self._filename=filename
         self._datapath=datapath if datapath.endswith('\\') else (datapath+'\\')
-        self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)
+        self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)#data number generator
         self._vallabels = g.get_vallabels()#value labels, [reading1, reading2, reading3, ..]
-        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]
-    def _print_gnucmd(self,dfpath,dfpath_bwd):
-        lbs = self._coolabels + self._vallabels
-        gnucmd = "set xlabel '%s' font ',11';set ylabel '%s' font ',11';"%(lbs[colx-1],lbs[coly-1])
-        gnucmd += r"set format x '%.03s %c';set format y '%.01s %c';"
-        gnucmd += "plot '%s' using %d:%d with lp"%(dfpath,colx,coly)
-        gnucmd += ", '%s' using %d:%d with lp ls 3"%(dfpath_bwd,colx,coly) if dfpath_bwd else ""
-        print "\n*****You can now copy the following command to gnuplot*****\n" + gnucmd + '\n'
+        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]. Here, the first 3 column are called coordinators, the rest are called values.
     def _print_progress(self,x,values,is_fwd_now):
+        '''print the progress bar as well as readings to the console. The bar looks like (__?______?__)'''
         pbar_width = 5
         a = int(x*(pbar_width+1))
         b = 2*(pbar_width-a)
         ch = chr(2) if is_fwd_now else chr(1)
         progress_bar = '\r('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '\r(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
-        print progress_bar[:TERM_WIDTH],
+        print progress_bar[:TERM_WIDTH],    
     def _sendToWord(self,msg,addTimestamp=True):
         towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
         if os.path.isfile(towordPath):
@@ -103,11 +95,11 @@ class easy_scan():
             os.system('%s'%towordPath+' "%s"'%_)
         else:
             print 'toWord: Can not find toWord.exe'
-    #generate data file, spyview file and copy the pyton script.
     def _create_data(self,
-                    x_vector,x_coordinate,x_parameter,#coordinate: labels, parameter: the string that specifies a channel
+                    x_vector,x_coordinate,x_parameter,
                     y_vector,y_coordinate,y_parameter,
                     z_vector,z_coordinate,z_parameter,bwd=False):
+        '''Generate the data file, spyview .meta file and copy scan scripts.'''
         qt.Data.set_filename_generator(self._generator)
         data = qt.Data(name=self._filename)
         self._coolabels = ['%s_(%s)'%(x_parameter,x_coordinate),'%s_(%s)'%(y_parameter,y_coordinate),'%s_(%s)'%(z_parameter,z_coordinate)]
@@ -127,7 +119,7 @@ class easy_scan():
         for i in self._vallabels:
             data.add_value(i)#add value labels
         data.create_file()#Create data file
-        SpyView(data).write_meta_file()#Create spyview meta.txt file
+        SpyView(data).write_meta_file()#Create meta.txt file for spyview
         qscan_file_path = sys._getframe().f_code.co_filename
         qscan_copyto_path = os.path.join(data._dir,os.path.split(qscan_file_path)[1])
         if not os.path.isfile(qscan_copyto_path):
@@ -138,13 +130,13 @@ class easy_scan():
             copyfile(this_file_path,to_script_path)
         else:
             f = open(to_script_path,'w')
-            f.write(this_file_path)#It maybe a string
+            f.write(this_file_path)#It maybe a code string if the function is called by more_scan()
             f.close()
         data._file.flush()
         return data
     def _paraok_scan(self,a,b,c):
         '''check whether parameters are OK for self._scan()'''
-        if 1==len(shape(a))==len(shape(b))==(len(shape(c))-1) and len(a)==len(b)==len(c):
+        if 1==len(np.shape(a))==len(np.shape(b))==(len(np.shape(c))-1) and len(a)==len(b)==len(c):
             return True
         else:
             print '_scan(): parameter error'
@@ -152,8 +144,8 @@ class easy_scan():
     def _paraokscan(self,a,b,c,d):
         '''check whether parameters are OK for self.scan()'''
         isok = False
-        if len(shape(a))==len(shape(b))==len(shape(c))== len(shape(d))<2:
-            if len(shape(a))==0:#0d
+        if len(np.shape(a))==len(np.shape(b))==len(np.shape(c))== len(np.shape(d))<2:
+            if len(np.shape(a))==0:#0d
                 isok = True
             elif len(a)==len(b)==len(c)==len(d):#1d
                 isok = True
@@ -169,27 +161,25 @@ class easy_scan():
             xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
             xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
             if xswp_by_mchn and xptlen!=2:
-                print 'You have set xswp_by_mchn=True while left xsteps!=1. No sweeps have been performed'
+                print 'You have set xswp_by_mchn=True while left xsteps!=1. No sweeps are performed'
                 return
         else:
             return
         if xswp_by_mchn:
-            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in the instrument side may NOT stop after you stop or pause the program manually\n    output will be set to the last value in the first loop!!'
+            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!'
         #start
         qt.mstart()
         t_scanstart = time() 
         data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
-        counter = 0
+        counter = 0#counter for scan
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
         qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
-        if is_print_cmd:#print command for gnuplot
-            self._print_gnucmd(dfpath,dfpath_bwd)
         print 'Start scanning: %d lines, %d points per line'%(numloops,xptlen)
         print 'File path:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         print 'Labels:', self._coolabels + self._vallabels
@@ -197,17 +187,17 @@ class easy_scan():
         ############# scan #############
         try:
             # set z channel(s)
-            for iz in arange(zptlen):
-                for i in arange(zlen):
+            for iz in np.arange(zptlen):
+                for i in np.arange(zlen):
                     g.set_val(zchan[i],zpnt[i][iz])
                 z_val0 = zpnt[0][iz]
                 # set y channel(s) and initialize x channel(s)
-                for iy in arange(yptlen):
+                for iy in np.arange(yptlen):
                     [starttime, counter] = timetrack.start(counter)
-                    for i in arange(ylen):
+                    for i in np.arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][0])
                     # delay after setting x back to x[0]
                     qt.msleep(delay1)
@@ -230,8 +220,11 @@ class easy_scan():
                     timetrack.remainingtime(starttime,numloops,counter)# Calculate and print remaining scantime
             print
         ############# end scan #############
+        except UserWarning as warning:
+            if warning.message=='next':
+                pass
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
-            print '\n\nInterrupted by ctrl+c'
+            print '\n\nInterrupted by user'
             self.user_interrrupt = True
         for d_item in data_loop:
             if d_item:
@@ -258,11 +251,11 @@ class easy_scan():
             #set xchans
             if not issweeping:
                 if xswp_by_mchn:
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][index_end])
                     issweeping = True
                 else:
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
             if delay2>0:
@@ -276,6 +269,14 @@ class easy_scan():
             if is_fwd_now or is1d:
                 qclient.add_data(datavalues)
                 qclient.update_plot()
+            #
+            last_key = ''
+            while msvcrt.kbhit():
+               last_key = msvcrt.getch()
+            if last_key == '\x05':#ctrl+e(xit)
+                raise KeyboardInterrupt
+            elif last_key == '\x0e':#ctrl+n(ext)
+                raise UserWarning('next')
             #change ix
             if xswp_by_mchn:
                 ix = 0 if xpnt[0][0]<=x_val0<=xpnt[0][-1] or xpnt[0][-1]<=x_val0<=xpnt[0][0] else -1
@@ -288,17 +289,17 @@ class easy_scan():
                zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False):
         #check parameters:
         if self._paraokscan(xlbl,xchan,xstart,xend):
-            if len(shape(xlbl))==0:
+            if len(np.shape(xlbl))==0:
                 xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
         else:
             return
         if self._paraokscan(ylbl,ychan,ystart,yend):
-            if len(shape(ylbl))==0:
+            if len(np.shape(ylbl))==0:
                 ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
         else:
             return
         if self._paraokscan(zlbl,zchan,zstart,zend):
-            if len(shape(zlbl))==0:
+            if len(np.shape(zlbl))==0:
                 zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
         else:
             return
@@ -315,19 +316,19 @@ class easy_scan():
         self._sendToWord(scanStr)
         #generate points
         xchnum = len(xchan)
-        xpnt = zeros((xchnum,xsteps+1))
-        for i in arange(xchnum):
-            xpnt[i] = linspace(xstart[i],xend[i],xsteps+1)
+        xpnt = np.zeros((xchnum,xsteps+1))
+        for i in np.arange(xchnum):
+            xpnt[i] = np.linspace(xstart[i],xend[i],xsteps+1)
             
         ychnum = len(ychan)
-        ypnt = zeros((ychnum,ysteps+1))
-        for i in arange(ychnum):
-            ypnt[i] = linspace(ystart[i],yend[i],ysteps+1)
+        ypnt = np.zeros((ychnum,ysteps+1))
+        for i in np.arange(ychnum):
+            ypnt[i] = np.linspace(ystart[i],yend[i],ysteps+1)
             
         zchnum = len(zchan)
-        zpnt = zeros((zchnum,zsteps+1))
-        for i in arange(zchnum):
-            zpnt[i] = linspace(zstart[i],zend[i],zsteps+1)
+        zpnt = np.zeros((zchnum,zsteps+1))
+        for i in np.arange(zchnum):
+            zpnt[i] = np.linspace(zstart[i],zend[i],zsteps+1)
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
@@ -492,11 +493,11 @@ def get_term_width():#get linewith of the console
     if a == 'Columns':
         return int(b)
 TERM_WIDTH = get_term_width()-1
-print '''
+LOGO = '''
 %s  __   ____   ___   __   __ _
 %s /  \ / ___) / __) / _\ (  ( \ 
 %s(  O )\___ \( (__ /    \/    /
 %s \__\)(____/ \___)\_/\_/\_)__)
 '''%(tuple([' '*(TERM_WIDTH/2-15)]*4))
+print LOGO
 ivvi = qt.instruments.get('ivvi')
-is_print_cmd = True
