@@ -51,7 +51,6 @@ class qtplot_client():
                 if self.lastfile == filename:
                     sckt.send('REFR:%s'%filename)
                 else:
-                    print 'Update qtplot with the new file ...',
                     self.lastfile = filename
                     sckt.send('FILE:%s;SHOW:'%filename)
                     print sckt.recv(128)
@@ -85,8 +84,9 @@ class easy_scan():
         a = int(x*(pbar_width+1))
         b = 2*(pbar_width-a)
         ch = chr(2) if is_fwd_now else chr(1)
-        progress_bar = '\r('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '\r(%s) '%('_'*(pbar_width*2+2))
+        progress_bar =  '('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
+        progress_bar = '\r' + STR_TIMEINFO + progress_bar
         print progress_bar[:TERM_WIDTH],    
     def _sendToWord(self,msg,addTimestamp=True):
         towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
@@ -130,7 +130,7 @@ class easy_scan():
             copyfile(this_file_path,to_script_path)
         else:
             f = open(to_script_path,'w')
-            f.write(this_file_path)#It maybe a code string if the function is called by more_scan()
+            f.write(this_file_path)#It's a code string if the function is called by more_scan()
             f.close()
         data._file.flush()
         return data
@@ -174,15 +174,18 @@ class easy_scan():
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
         counter = 0#counter for scan
+        global STR_TIMEINFO
+        STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
         qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
-        print 'Start scanning: %d lines, %d points per line'%(numloops,xptlen)
-        print 'File path:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
         print 'Labels:', self._coolabels + self._vallabels
+        print '\nctrl+e: exit more safely; ctrl+n: next scan.'
         self.user_interrrupt = False
         ############# scan #############
         try:
@@ -193,7 +196,7 @@ class easy_scan():
                 z_val0 = zpnt[0][iz]
                 # set y channel(s) and initialize x channel(s)
                 for iy in np.arange(yptlen):
-                    [starttime, counter] = timetrack.start(counter)
+                    t0 = time()
                     for i in np.arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
@@ -201,10 +204,10 @@ class easy_scan():
                         g.set_val(xchan[i],xpnt[i][0])
                     # delay after setting x back to x[0]
                     qt.msleep(delay1)
-                    # sweep x channel(s)
+                    # sweep x channels
                     is_fwd_now = True
                     is1d = (numloops==1)
-                    t0 = time()
+                    t1 = time()
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
                             if is_fwd_now==False and is1d:
@@ -216,16 +219,18 @@ class easy_scan():
                                 qclient.update_plot()
                             self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
-                    print '\r'+' '*TERM_WIDTH+'\r%.1f, %.3f'%((time()-t0),(time()-t0)/xptlen),
-                    timetrack.remainingtime(starttime,numloops,counter)# Calculate and print remaining scantime
-            print
+                    t2 = time()
+                    counter += 1
+                    STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xptlen,(t2-t0)*(numloops-counter)/60)
         ############# end scan #############
         except UserWarning as warning:
             if warning.message=='next':
+                print '\n\n'
                 pass
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
             print '\n\nInterrupted by user'
             self.user_interrrupt = True
+        print
         for d_item in data_loop:
             if d_item:
                 d_item._write_settings_file()# Overwrite the settings file created at the beginning, this ensures updating the sweep variable with the latest value
@@ -303,7 +308,6 @@ class easy_scan():
                 zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
         else:
             return
-        print '  %s \n'%('_'*(TERM_WIDTH-3)) +' (%s)\n'%('_'*(TERM_WIDTH-3))
         #send message to word
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
@@ -333,6 +337,7 @@ class easy_scan():
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd,xswp_by_mchn)
+        print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
         scanStr = "e.set('%s',%s)"%(chan,val)
@@ -351,6 +356,7 @@ class easy_scan():
         else:
             g.set_val(chan,val)
         self._sendToWord(scanStr+'<return>')
+        print
     def more_scan(self,script_path):
         global this_file_path
         while os.path.isfile(script_path):
@@ -397,6 +403,7 @@ class get_set():
             print 'Some instruments you want to read has not been loaded by qtlab. No scan has been done.'
             sys.exit()
         self._rdnum = len(self._rdlabels)
+        print
     def take_data(self):
         '''take data from input channels and do some calculation'''
         val = []
@@ -493,11 +500,12 @@ def get_term_width():#get linewith of the console
     if a == 'Columns':
         return int(b)
 TERM_WIDTH = get_term_width()-1
+STR_TIMEINFO=''
 LOGO = '''
 %s  __   ____   ___   __   __ _
 %s /  \ / ___) / __) / _\ (  ( \ 
 %s(  O )\___ \( (__ /    \/    /
-%s \__\)(____/ \___)\_/\_/\_)__)
-'''%(tuple([' '*(TERM_WIDTH/2-15)]*4))
+%s \__\)(____/ \___)\_/\_/\_)__)  for qtlab
+'''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
 print LOGO
 ivvi = qt.instruments.get('ivvi')
