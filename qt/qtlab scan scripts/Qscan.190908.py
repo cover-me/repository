@@ -4,7 +4,8 @@
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
-# 19.09.06 Press "ctrl+e" to exit safely
+# 19.09.06 shortcuts ctrl+e and ctrl+n
+# 19.09.08 shifted scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import numpy as np
 import data as d
@@ -134,39 +135,49 @@ class easy_scan():
             f.close()
         data._file.flush()
         return data
-    def _paraok_scan(self,a,b,c):
+    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift):
         '''check whether parameters are OK for self._scan()'''
-        if 1==len(np.shape(a))==len(np.shape(b))==(len(np.shape(c))-1) and len(a)==len(b)==len(c):
-            return True
-        else:
-            print '_scan(): parameter error'
-            return False
-    def _paraokscan(self,a,b,c,d):
+        isok = True
+        if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
+            isok = False
+        if not (1==len(np.shape(ylbl))==len(np.shape(ychan))==(len(np.shape(ypnt))-1) and len(ylbl)==len(ychan)==len(ypnt)):
+            isok = False            
+        if not (1==len(np.shape(zlbl))==len(np.shape(zchan))==(len(np.shape(zpnt))-1) and len(zlbl)==len(zchan)==len(zpnt)):
+            isok = False
+        if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'y0' in xshift and 'shift' in xlbl[0]):
+            isok = False
+        if xswp_by_mchn and len(xpnt[0])!=2:
+            isok = False
+        if not isok:            
+            print '_scan(): Parameter error'
+            sys.exit()
+        if xswp_by_mchn:
+            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!'
+    def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
-        isok = False
-        if len(np.shape(a))==len(np.shape(b))==len(np.shape(c))== len(np.shape(d))<2:
-            if len(np.shape(a))==0:#0d
-                isok = True
-            elif len(a)==len(b)==len(c)==len(d):#1d
-                isok = True
+        isok = True
+        if not len(np.shape(xlbl))==len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
+            isok = False
+        if not len(np.shape(ylbl))==len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
+            isok = False
+        if not len(np.shape(zlbl))==len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
+            isok = False
+        if len(np.shape(xlbl))==1 and not len(xlbl)==len(xchan)==len(xstart)==len(xend):
+            isok = False
+        if len(np.shape(ylbl))==1 and not len(ylbl)==len(ychan)==len(ystart)==len(yend):
+            isok = False
+        if len(np.shape(zlbl))==1 and not len(zlbl)==len(zchan)==len(zstart)==len(zend):
+            isok = False
         if not isok:
-            print 'scan(): parameter error'
-        return isok
+            print 'scan(): Parameter error'
+            sys.exit()
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False):
-        #check parameters
-        if self._paraok_scan(xlbl,xchan,xpnt) and self._paraok_scan(ylbl,ychan,ypnt) and self._paraok_scan(zlbl,zchan,zpnt):
-            xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
-            xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
-            if xswp_by_mchn and xptlen!=2:
-                print 'You have set xswp_by_mchn=True while left xsteps!=1. No sweeps are performed'
-                return
-        else:
-            return
-        if xswp_by_mchn:
-            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!'
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,xshift=None):
+        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift)#check parameters
+        xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
+        xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
         t_scanstart = time() 
@@ -217,7 +228,10 @@ class easy_scan():
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
                                 qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt[0][::-1],ypnt[0][::-1])
                                 qclient.update_plot()
-                            self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            if xshift:
+                                self._scan1d(xchan,((y_val0-xshift['y0'])/xshift['slope']+xpnt),xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            else:
+                                self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
                     t2 = time()
                     counter += 1
@@ -291,33 +305,28 @@ class easy_scan():
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False):
-        #check parameters:
-        if self._paraokscan(xlbl,xchan,xstart,xend):
-            if len(np.shape(xlbl))==0:
-                xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
-        else:
-            return
-        if self._paraokscan(ylbl,ychan,ystart,yend):
-            if len(np.shape(ylbl))==0:
-                ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
-        else:
-            return
-        if self._paraokscan(zlbl,zchan,zstart,zend):
-            if len(np.shape(zlbl))==0:
-                zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
-        else:
-            return
+               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,xshift=None):
+        #check parameters
+        self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
+        if len(np.shape(xlbl))==0:
+            xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
+        if len(np.shape(ylbl))==0:
+            ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
+        if len(np.shape(zlbl))==0:
+            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
+
         #send message to word
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
+        scanStr += "xshift=%s, "%xshift if xshift else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
         scanStr += '), dly(%s,%s), rt(%s,%s,%s), '%(delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
         self._sendToWord(scanStr)
+        
         #generate points
         xchnum = len(xchan)
         xpnt = np.zeros((xchnum,xsteps+1))
@@ -336,7 +345,7 @@ class easy_scan():
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd,xswp_by_mchn)
+               zlbl,zchan,zpnt,bwd,xswp_by_mchn,xshift)
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
