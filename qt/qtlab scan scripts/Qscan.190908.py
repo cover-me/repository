@@ -7,6 +7,7 @@
 # 19.09.06 shortcuts ctrl+e and ctrl+n
 # 19.09.08 shifted scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
+import IPython.core.interactiveshell as ips
 import numpy as np
 import data as d
 from lib.file_support.spyview import SpyView
@@ -58,7 +59,7 @@ class qtplot_client():
                 sckt.close()
             except Exception:
                 self.mute = True
-                print 'Socket failed. Mute qtplot client.'
+                print2('\nSocket failed. Mute qtplot client.\n','red')
     def compare(self,data):
         if (not self.mute) and self.mmap2npy:
             print 'Comparing .npy data and data ...',
@@ -95,7 +96,7 @@ class easy_scan():
             _ = strftime('%m/%d %H:%M, ')+msg if addTimestamp else msg
             os.system('%s'%towordPath+' "%s"'%_)
         else:
-            print 'toWord: Can not find toWord.exe'
+            print2('toWord: Can not find toWord.exe\n','red')
     def _create_data(self,
                     x_vector,x_coordinate,x_parameter,
                     y_vector,y_coordinate,y_parameter,
@@ -149,10 +150,10 @@ class easy_scan():
         if xswp_by_mchn and len(xpnt[0])!=2:
             isok = False
         if not isok:            
-            print '_scan(): Parameter error'
+            print2('_scan(): Parameter error','red')
             sys.exit()
         if xswp_by_mchn:
-            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!'
+            print2('\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!','red')
     def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
         isok = True
@@ -169,7 +170,7 @@ class easy_scan():
         if len(np.shape(zlbl))==1 and not len(zlbl)==len(zchan)==len(zstart)==len(zend):
             isok = False
         if not isok:
-            print 'scan(): Parameter error'
+            print2('scan(): Parameter error','red')
             sys.exit()
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
@@ -194,9 +195,9 @@ class easy_scan():
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
-        print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
         print 'Labels:', self._coolabels + self._vallabels
-        print '\nctrl+e: exit more safely; ctrl+n: next scan.'
+        print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
+        print '...\nctrl+e: exit more safely; ctrl+n: next scan.'
         self.user_interrrupt = False
         ############# scan #############
         try:
@@ -242,7 +243,7 @@ class easy_scan():
                 print '\n\n'
                 pass
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
-            print '\n\nInterrupted by user'
+            print2('\n\nInterrupted by user','red')
             self.user_interrrupt = True
         print
         for d_item in data_loop:
@@ -316,6 +317,7 @@ class easy_scan():
             zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
 
         #send message to word
+        # print2('','scan',True)#set font color
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
@@ -346,9 +348,11 @@ class easy_scan():
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd,xswp_by_mchn,xshift)
+        # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
+        # print2('','set',True)#set font color
         scanStr = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
@@ -365,6 +369,7 @@ class easy_scan():
         else:
             g.set_val(chan,val)
         self._sendToWord(scanStr+'<return>')
+        # print2('','')#set font to default
         print
     def more_scan(self,script_path):
         global this_file_path
@@ -379,6 +384,7 @@ class easy_scan():
 class get_set():
     '''get readings, set outputs'''
     def __init__(self):
+        # print2('','yellow',True)#set font color
         self.t0  = time()
         self._rdlabels = []#labels used for taking data
         self._rdchans = []
@@ -409,9 +415,10 @@ class get_set():
                 print 'get_all:\t', a
                 chn.get_all()
         if not all(self._rdchans):
-            print 'Some instruments you want to read has not been loaded by qtlab. No scan has been done.'
+            print2('Some instruments you want to read has not been loaded by qtlab. No scan has been done.','red')
             sys.exit()
         self._rdnum = len(self._rdlabels)
+        # print2('','')#set font color
         print
     def take_data(self):
         '''take data from input channels and do some calculation'''
@@ -435,7 +442,7 @@ class get_set():
             elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
-                print 'cannot read channel: %s\n!!!'%ch
+                print2('cannot read channel: %s\n!!!'%ch,'red')
         val = val + self.get_prcss(val)#add processed data        
         #qt.msleep(0.01)
         return val
@@ -488,7 +495,7 @@ class get_set():
         '''
         names = ['index','label','Rin','lockin_osc','Vrange','Igain']
         if len(arg_dict) != len(names) or (not all([(i in arg_dict) for i in names])):
-            print 'Failed to add lockin_conductance!'
+            print2('Failed to add lockin_conductance!\n','red')
             return
         self._prcss_labels.append(arg_dict['label'])
         self._prcss_list.append({'function':self.get_lockin_conductance,'arg':arg_dict})
@@ -508,13 +515,24 @@ def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
     if a == 'Columns':
         return int(b)
+def print2(s,style='',hold=False):
+    stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[34m','magenta':'\033[35m','cyan':'\033[36m','white':'\033[37m',
+                'reset':'\033[0m','bold':'\033[1m',
+                'scan':'\033[36m','set':'\033[35m',
+                }
+    post = '' if hold else '\033[0m'
+    if style in stylelist:
+        ips.io.stdout.write('%s%s%s'%(stylelist[style],s,post))
+    else:
+        ips.io.stdout.write('%s%s%s'%(style,s,post))
+    
 TERM_WIDTH = get_term_width()-1
 STR_TIMEINFO=''
 LOGO = '''
-%s  __   ____   ___   __   __ _
-%s /  \ / ___) / __) / _\ (  ( \ 
-%s(  O )\___ \( (__ /    \/    /
-%s \__\)(____/ \___)\_/\_/\_)__)  for qtlab
+%s\033[1;31m  __   ____   ___   __   __ _
+%s\033[1;31m /  \ / ___) / __) / _\ (  ( \ 
+%s\033[1;33m(  O )\___ \( (__ /    \/    /
+%s\033[1;36m \__\)(____/ \___)\_/\_/\_)__)  \033[1;34mfor qtlab\n
 '''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
-print LOGO
+print2(LOGO)
 ivvi = qt.instruments.get('ivvi')
