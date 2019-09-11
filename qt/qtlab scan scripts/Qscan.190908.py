@@ -4,29 +4,29 @@
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
-from numpy import linspace, zeros, shape, arange, repeat, allclose, vstack, empty, nan, meshgrid, save, load
-from lib.file_support.spyview import SpyView
-import qt
-import timetrack
-import sys
+# 19.09.06 shortcuts ctrl+e and ctrl+n
+# 19.09.08 shifted scan
+import qt,timetrack,sys,os,socket,winsound,msvcrt
+import IPython.core.interactiveshell as ips
+import numpy as np
 import data as d
-import os
+from lib.file_support.spyview import SpyView
 from time import time, strftime
-import socket
 from shutil import copyfile, rmtree
 from tempfile import mkdtemp
-import winsound
+
 class qtplot_client():
+    '''A client for real-time plotting in qtplot'''
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
-        self.mmap2npy = mmap2npy #create .npy file or not
+        self.mmap2npy = mmap2npy #whether create mmap .npy file or not
         self.filepath = ''#.dat file path
         self.npy_path = ''
         self.lastfile = ''
         self.last_update_time = 0
-        self.mdata = None#mapped data from .npy file
-        self.counter = 0
-        self.interval = interval
+        self.mdata = None#mmap data which is plotted by qtplot
+        self.counter = 0#real-time row number
+        self.interval = interval#minimum refresh interval for qtplot
     def set_file(self,filepath,col=0,x_pts=[],y_pts=[]):
         if not self.mute:
             self.filepath = filepath
@@ -35,10 +35,10 @@ class qtplot_client():
                 meta_path = self.npy_path[:-3]+'meta.txt'
                 copyfile(filepath,meta_path)
                 row = len(x_pts) * len(y_pts)
-                m = empty((row,col))*nan
-                m[:,:2] = vstack(meshgrid(x_pts,y_pts)).reshape(2,-1).T
-                save(self.npy_path,m)
-                self.mdata = load(self.npy_path, mmap_mode='r+')
+                m = np.empty((row,col))*np.nan#data matrix
+                m[:,:2] = np.vstack(np.meshgrid(x_pts,y_pts)).reshape(2,-1).T
+                np.save(self.npy_path,m)
+                self.mdata = np.load(self.npy_path, mmap_mode='r+')
     def add_data(self,values):
         if (not self.mute) and self.mmap2npy:
             self.mdata[self.counter,:] = values
@@ -53,18 +53,17 @@ class qtplot_client():
                 if self.lastfile == filename:
                     sckt.send('REFR:%s'%filename)
                 else:
-                    print 'update qtplot with the new file ...',
                     self.lastfile = filename
                     sckt.send('FILE:%s;SHOW:'%filename)
                     print sckt.recv(128)
                 sckt.close()
             except Exception:
                 self.mute = True
-                print 'Socket failed. Mute client.'
+                print2('\nSocket failed. Mute qtplot client.\n','red')
     def compare(self,data):
         if (not self.mute) and self.mmap2npy:
             print 'Comparing .npy data and data ...',
-            is_equal =  allclose(self.mdata[:self.counter,:],data,rtol=1e-12,atol=0.)
+            is_equal =  np.allclose(self.mdata[:self.counter,:],data,rtol=1e-12,atol=0.)
             print '%s!'%is_equal
     def close(self):
         del self.mdata
@@ -78,36 +77,31 @@ class easy_scan():
     def __init__(self):
         self._filename=filename
         self._datapath=datapath if datapath.endswith('\\') else (datapath+'\\')
-        self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)
+        self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)#data number generator
         self._vallabels = g.get_vallabels()#value labels, [reading1, reading2, reading3, ..]
-        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]
-    def _print_gnucmd(self,dfpath,dfpath_bwd):
-        lbs = self._coolabels + self._vallabels
-        gnucmd = "set xlabel '%s' font ',11';set ylabel '%s' font ',11';"%(lbs[colx-1],lbs[coly-1])
-        gnucmd += r"set format x '%.03s %c';set format y '%.01s %c';"
-        gnucmd += "plot '%s' using %d:%d with lp"%(dfpath,colx,coly)
-        gnucmd += ", '%s' using %d:%d with lp ls 3"%(dfpath_bwd,colx,coly) if dfpath_bwd else ""
-        print "\n*****You can now copy the following command to gnuplot*****\n" + gnucmd + '\n'
+        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]. Here, the first 3 column are called coordinators, the rest are called values.
     def _print_progress(self,x,values,is_fwd_now):
+        '''print the progress bar as well as readings to the console. The bar looks like (__?______?__)'''
         pbar_width = 5
         a = int(x*(pbar_width+1))
         b = 2*(pbar_width-a)
         ch = chr(2) if is_fwd_now else chr(1)
-        progress_bar = '\r('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '\r(%s) '%('_'*(pbar_width*2+2))
+        progress_bar =  '('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
-        print progress_bar[:TERM_WIDTH],
+        progress_bar = '\r' + STR_TIMEINFO + progress_bar
+        print progress_bar[:TERM_WIDTH],    
     def _sendToWord(self,msg,addTimestamp=True):
         towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
         if os.path.isfile(towordPath):
             _ = strftime('%m/%d %H:%M, ')+msg if addTimestamp else msg
             os.system('%s'%towordPath+' "%s"'%_)
         else:
-            print 'toWord: Can not find toWord.exe'
-    #generate data file, spyview file and copy the pyton script.
+            print2('toWord: Can not find toWord.exe\n','red')
     def _create_data(self,
-                    x_vector,x_coordinate,x_parameter,#coordinate: labels, parameter: the string that specifies a channel
+                    x_vector,x_coordinate,x_parameter,
                     y_vector,y_coordinate,y_parameter,
                     z_vector,z_coordinate,z_parameter,bwd=False):
+        '''Generate the data file, spyview .meta file and copy scan scripts.'''
         qt.Data.set_filename_generator(self._generator)
         data = qt.Data(name=self._filename)
         self._coolabels = ['%s_(%s)'%(x_parameter,x_coordinate),'%s_(%s)'%(y_parameter,y_coordinate),'%s_(%s)'%(z_parameter,z_coordinate)]
@@ -127,7 +121,7 @@ class easy_scan():
         for i in self._vallabels:
             data.add_value(i)#add value labels
         data.create_file()#Create data file
-        SpyView(data).write_meta_file()#Create spyview meta.txt file
+        SpyView(data).write_meta_file()#Create meta.txt file for spyview
         qscan_file_path = sys._getframe().f_code.co_filename
         qscan_copyto_path = os.path.join(data._dir,os.path.split(qscan_file_path)[1])
         if not os.path.isfile(qscan_copyto_path):
@@ -138,83 +132,94 @@ class easy_scan():
             copyfile(this_file_path,to_script_path)
         else:
             f = open(to_script_path,'w')
-            f.write(this_file_path)#It maybe a string
+            f.write(this_file_path)#It's a code string if the function is called by more_scan()
             f.close()
         data._file.flush()
         return data
-    def _paraok_scan(self,a,b,c):
+    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift):
         '''check whether parameters are OK for self._scan()'''
-        if 1==len(shape(a))==len(shape(b))==(len(shape(c))-1) and len(a)==len(b)==len(c):
-            return True
-        else:
-            print '_scan(): parameter error'
-            return False
-    def _paraokscan(self,a,b,c,d):
+        isok = True
+        if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
+            isok = False
+        if not (1==len(np.shape(ylbl))==len(np.shape(ychan))==(len(np.shape(ypnt))-1) and len(ylbl)==len(ychan)==len(ypnt)):
+            isok = False            
+        if not (1==len(np.shape(zlbl))==len(np.shape(zchan))==(len(np.shape(zpnt))-1) and len(zlbl)==len(zchan)==len(zpnt)):
+            isok = False
+        if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'y0' in xshift and 'shift' in xlbl[0]):
+            isok = False
+        if xswp_by_mchn and len(xpnt[0])!=2:
+            isok = False
+        if not isok:            
+            print2('_scan(): Parameter error','red')
+            sys.exit()
+        if xswp_by_mchn:
+            print2('\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!','red')
+    def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
-        isok = False
-        if len(shape(a))==len(shape(b))==len(shape(c))== len(shape(d))<2:
-            if len(shape(a))==0:#0d
-                isok = True
-            elif len(a)==len(b)==len(c)==len(d):#1d
-                isok = True
+        isok = True
+        if not len(np.shape(xlbl))==len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
+            isok = False
+        if not len(np.shape(ylbl))==len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
+            isok = False
+        if not len(np.shape(zlbl))==len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
+            isok = False
+        if len(np.shape(xlbl))==1 and not len(xlbl)==len(xchan)==len(xstart)==len(xend):
+            isok = False
+        if len(np.shape(ylbl))==1 and not len(ylbl)==len(ychan)==len(ystart)==len(yend):
+            isok = False
+        if len(np.shape(zlbl))==1 and not len(zlbl)==len(zchan)==len(zstart)==len(zend):
+            isok = False
         if not isok:
-            print 'scan(): parameter error'
-        return isok
+            print2('scan(): Parameter error','red')
+            sys.exit()
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False):
-        #check parameters
-        if self._paraok_scan(xlbl,xchan,xpnt) and self._paraok_scan(ylbl,ychan,ypnt) and self._paraok_scan(zlbl,zchan,zpnt):
-            xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
-            xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
-            if xswp_by_mchn and xptlen!=2:
-                print 'You have set xswp_by_mchn=True while left xsteps!=1. No sweeps have been performed'
-                return
-        else:
-            return
-        if xswp_by_mchn:
-            print '\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in the instrument side may NOT stop after you stop or pause the program manually\n    output will be set to the last value in the first loop!!'
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,xshift=None):
+        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift)#check parameters
+        xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
+        xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
         t_scanstart = time() 
         data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
-        counter = 0
+        counter = 0#counter for scan
+        global STR_TIMEINFO
+        STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
         qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
-        if is_print_cmd:#print command for gnuplot
-            self._print_gnucmd(dfpath,dfpath_bwd)
-        print 'Start scanning: %d lines, %d points per line'%(numloops,xptlen)
-        print 'File path:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         print 'Labels:', self._coolabels + self._vallabels
+        print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
+        print '...\nctrl+e: exit more safely; ctrl+n: next scan.'
         self.user_interrrupt = False
         ############# scan #############
         try:
             # set z channel(s)
-            for iz in arange(zptlen):
-                for i in arange(zlen):
+            for iz in np.arange(zptlen):
+                for i in np.arange(zlen):
                     g.set_val(zchan[i],zpnt[i][iz])
                 z_val0 = zpnt[0][iz]
                 # set y channel(s) and initialize x channel(s)
-                for iy in arange(yptlen):
-                    [starttime, counter] = timetrack.start(counter)
-                    for i in arange(ylen):
+                for iy in np.arange(yptlen):
+                    t0 = time()
+                    for i in np.arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][0])
                     # delay after setting x back to x[0]
                     qt.msleep(delay1)
-                    # sweep x channel(s)
+                    # sweep x channels
                     is_fwd_now = True
                     is1d = (numloops==1)
-                    t0 = time()
+                    t1 = time()
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
                             if is_fwd_now==False and is1d:
@@ -224,15 +229,23 @@ class easy_scan():
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
                                 qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt[0][::-1],ypnt[0][::-1])
                                 qclient.update_plot()
-                            self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            if xshift:
+                                self._scan1d(xchan,((y_val0-xshift['y0'])/xshift['slope']+xpnt),xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            else:
+                                self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
-                    print '\r'+' '*TERM_WIDTH+'\r%.1f, %.3f'%((time()-t0),(time()-t0)/xptlen),
-                    timetrack.remainingtime(starttime,numloops,counter)# Calculate and print remaining scantime
-            print
+                    t2 = time()
+                    counter += 1
+                    STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xptlen,(t2-t0)*(numloops-counter)/60)
         ############# end scan #############
+        except UserWarning as warning:
+            if warning.message=='next':
+                print '\n\n'
+                pass
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
-            print '\n\nInterrupted by ctrl+c'
+            print2('\n\nInterrupted by user','red')
             self.user_interrrupt = True
+        print
         for d_item in data_loop:
             if d_item:
                 d_item._write_settings_file()# Overwrite the settings file created at the beginning, this ensures updating the sweep variable with the latest value
@@ -258,11 +271,11 @@ class easy_scan():
             #set xchans
             if not issweeping:
                 if xswp_by_mchn:
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][index_end])
                     issweeping = True
                 else:
-                    for i in arange(xlen):
+                    for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
             if delay2>0:
@@ -276,6 +289,14 @@ class easy_scan():
             if is_fwd_now or is1d:
                 qclient.add_data(datavalues)
                 qclient.update_plot()
+            #
+            last_key = ''
+            while msvcrt.kbhit():
+               last_key = msvcrt.getch()
+            if last_key == '\x05':#ctrl+e(xit)
+                raise KeyboardInterrupt
+            elif last_key == '\x0e':#ctrl+n(ext)
+                raise UserWarning('next')
             #change ix
             if xswp_by_mchn:
                 ix = 0 if xpnt[0][0]<=x_val0<=xpnt[0][-1] or xpnt[0][-1]<=x_val0<=xpnt[0][0] else -1
@@ -285,55 +306,53 @@ class easy_scan():
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False):
-        #check parameters:
-        if self._paraokscan(xlbl,xchan,xstart,xend):
-            if len(shape(xlbl))==0:
-                xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
-        else:
-            return
-        if self._paraokscan(ylbl,ychan,ystart,yend):
-            if len(shape(ylbl))==0:
-                ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
-        else:
-            return
-        if self._paraokscan(zlbl,zchan,zstart,zend):
-            if len(shape(zlbl))==0:
-                zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
-        else:
-            return
-        print '  %s \n'%('_'*(TERM_WIDTH-3)) +' (%s)\n'%('_'*(TERM_WIDTH-3))
+               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,xshift=None):
+        #check parameters
+        self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
+        if len(np.shape(xlbl))==0:
+            xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
+        if len(np.shape(ylbl))==0:
+            ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
+        if len(np.shape(zlbl))==0:
+            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
+
         #send message to word
+        # print2('','scan',True)#set font color
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
+        scanStr += "xshift=%s, "%xshift if xshift else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
         scanStr += '), dly(%s,%s), rt(%s,%s,%s), '%(delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
         self._sendToWord(scanStr)
+        
         #generate points
         xchnum = len(xchan)
-        xpnt = zeros((xchnum,xsteps+1))
-        for i in arange(xchnum):
-            xpnt[i] = linspace(xstart[i],xend[i],xsteps+1)
+        xpnt = np.zeros((xchnum,xsteps+1))
+        for i in np.arange(xchnum):
+            xpnt[i] = np.linspace(xstart[i],xend[i],xsteps+1)
             
         ychnum = len(ychan)
-        ypnt = zeros((ychnum,ysteps+1))
-        for i in arange(ychnum):
-            ypnt[i] = linspace(ystart[i],yend[i],ysteps+1)
+        ypnt = np.zeros((ychnum,ysteps+1))
+        for i in np.arange(ychnum):
+            ypnt[i] = np.linspace(ystart[i],yend[i],ysteps+1)
             
         zchnum = len(zchan)
-        zpnt = zeros((zchnum,zsteps+1))
-        for i in arange(zchnum):
-            zpnt[i] = linspace(zstart[i],zend[i],zsteps+1)
+        zpnt = np.zeros((zchnum,zsteps+1))
+        for i in np.arange(zchnum):
+            zpnt[i] = np.linspace(zstart[i],zend[i],zsteps+1)
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd,xswp_by_mchn)
+               zlbl,zchan,zpnt,bwd,xswp_by_mchn,xshift)
+        # print2('','')#set font to default
+        print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
     def set(self,chan,val):
+        # print2('','set',True)#set font color
         scanStr = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
@@ -350,6 +369,8 @@ class easy_scan():
         else:
             g.set_val(chan,val)
         self._sendToWord(scanStr+'<return>')
+        # print2('','')#set font to default
+        print
     def more_scan(self,script_path):
         global this_file_path
         while os.path.isfile(script_path):
@@ -363,6 +384,7 @@ class easy_scan():
 class get_set():
     '''get readings, set outputs'''
     def __init__(self):
+        # print2('','yellow',True)#set font color
         self.t0  = time()
         self._rdlabels = []#labels used for taking data
         self._rdchans = []
@@ -393,9 +415,11 @@ class get_set():
                 print 'get_all:\t', a
                 chn.get_all()
         if not all(self._rdchans):
-            print 'Some instruments you want to read has not been loaded by qtlab. No scan has been done.'
+            print2('Some instruments you want to read has not been loaded by qtlab. No scan has been done.','red')
             sys.exit()
         self._rdnum = len(self._rdlabels)
+        # print2('','')#set font color
+        print
     def take_data(self):
         '''take data from input channels and do some calculation'''
         val = []
@@ -418,7 +442,7 @@ class get_set():
             elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
-                print 'cannot read channel: %s\n!!!'%ch
+                print2('cannot read channel: %s\n!!!'%ch,'red')
         val = val + self.get_prcss(val)#add processed data        
         #qt.msleep(0.01)
         return val
@@ -471,7 +495,7 @@ class get_set():
         '''
         names = ['index','label','Rin','lockin_osc','Vrange','Igain']
         if len(arg_dict) != len(names) or (not all([(i in arg_dict) for i in names])):
-            print 'Failed to add lockin_conductance!'
+            print2('Failed to add lockin_conductance!\n','red')
             return
         self._prcss_labels.append(arg_dict['label'])
         self._prcss_list.append({'function':self.get_lockin_conductance,'arg':arg_dict})
@@ -491,12 +515,24 @@ def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
     if a == 'Columns':
         return int(b)
+def print2(s,style='',hold=False):
+    stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[34m','magenta':'\033[35m','cyan':'\033[36m','white':'\033[37m',
+                'reset':'\033[0m','bold':'\033[1m',
+                'scan':'\033[36m','set':'\033[35m',
+                }
+    post = '' if hold else '\033[0m'
+    if style in stylelist:
+        ips.io.stdout.write('%s%s%s'%(stylelist[style],s,post))
+    else:
+        ips.io.stdout.write('%s%s%s'%(style,s,post))
+    
 TERM_WIDTH = get_term_width()-1
-print '''
-%s  __   ____   ___   __   __ _
-%s /  \ / ___) / __) / _\ (  ( \ 
-%s(  O )\___ \( (__ /    \/    /
-%s \__\)(____/ \___)\_/\_/\_)__)
-'''%(tuple([' '*(TERM_WIDTH/2-15)]*4))
+STR_TIMEINFO=''
+LOGO = '''
+%s\033[1;31m  __   ____   ___   __   __ _
+%s\033[1;31m /  \ / ___) / __) / _\ (  ( \ 
+%s\033[1;33m(  O )\___ \( (__ /    \/    /
+%s\033[1;36m \__\)(____/ \___)\_/\_/\_)__)  \033[1;34mfor qtlab\n
+'''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
+print2(LOGO)
 ivvi = qt.instruments.get('ivvi')
-is_print_cmd = True
