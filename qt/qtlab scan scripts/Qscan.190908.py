@@ -212,8 +212,12 @@ class easy_scan():
                     for i in np.arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
+                    if xshift:
+                        xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
+                    else:
+                        xpnt2 = xpnt
                     for i in np.arange(xlen):
-                        g.set_val(xchan[i],xpnt[i][0])
+                        g.set_val(xchan[i],xpnt2[i][0])
                     # delay after setting x back to x[0]
                     qt.msleep(delay1)
                     # sweep x channels
@@ -227,12 +231,9 @@ class easy_scan():
                                 qclient.compare(data.get_data())
                                 qclient.close()
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt[0][::-1],ypnt[0][::-1])
+                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0][::-1])
                                 qclient.update_plot()
-                            if xshift:
-                                self._scan1d(xchan,((y_val0-xshift['y0'])/xshift['slope']+xpnt),xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
-                            else:
-                                self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
                     t2 = time()
                     counter += 1
@@ -283,8 +284,8 @@ class easy_scan():
             #get xchans
             x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
             #take and log data
-            datavalues = [x_val0,y_val0,z_val0]+g.take_data()
-            d_item.add_data_point(*datavalues)
+            datavalues = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
+            d_item.add_data_point(*datavalues)#takes around 1 ms or less
             self._print_progress(1.*ix/xptlen,datavalues,is_fwd_now)
             if is_fwd_now or is1d:
                 qclient.add_data(datavalues)
