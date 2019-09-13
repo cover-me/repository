@@ -27,16 +27,18 @@ class qtplot_client():
         self.mdata = None#mmap data which is plotted by qtplot
         self.counter = 0#real-time row number
         self.interval = interval#minimum refresh interval for qtplot
-    def set_file(self,filepath,col=0,x_pts=[],y_pts=[]):
+    def set_file(self,filepath,col=0,x_pts=[],y_pts=[],z_pts=[0]):
         if not self.mute:
             self.filepath = filepath
             if self.mmap2npy:
                 self.npy_path = os.path.join(mkdtemp(), 'qtplot_temp.npy')
                 meta_path = self.npy_path[:-3]+'meta.txt'
                 copyfile(filepath,meta_path)
-                row = len(x_pts) * len(y_pts)
+                row = len(x_pts) * len(y_pts) * len(z_pts)
                 m = np.empty((row,col))*np.nan#data matrix
-                m[:,:2] = np.vstack(np.meshgrid(x_pts,y_pts)).reshape(2,-1).T
+                m[:,0] = np.tile(x_pts,len(y_pts) * len(z_pts))
+                m[:,1] = np.tile(np.repeat(y_pts,len(x_pts)),len(z_pts))
+                m[:,2] = np.repeat(z_pts,len(x_pts) * len(y_pts))
                 np.save(self.npy_path,m)
                 self.mdata = np.load(self.npy_path, mmap_mode='r+')
     def add_data(self,values):
@@ -181,7 +183,7 @@ class easy_scan():
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
-        t_scanstart = time() 
+        t_scanstart = time()
         data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
@@ -191,7 +193,7 @@ class easy_scan():
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
         qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
-        qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
+        qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
@@ -231,7 +233,7 @@ class easy_scan():
                                 qclient.compare(data.get_data())
                                 qclient.close()
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0][::-1])
+                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0],zpnt[0])#1d data
                                 qclient.update_plot()
                             self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
@@ -319,9 +321,9 @@ class easy_scan():
 
         #send message to word
         # print2('','scan',True)#set font color
-        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
+        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
+        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
+        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
         scanStr += "xshift=%s, "%xshift if xshift else ''
