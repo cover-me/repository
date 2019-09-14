@@ -5,7 +5,7 @@
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
-# 19.09.08 shifted scan
+# 19.09.14 shifted scan, 3D scan, meander scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -451,7 +451,7 @@ class get_set():
             elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
-                print2('cannot read channel: %s\n!!!'%ch,'red')
+                print2('\nCan\'t read channel: %s\n!!!'%ch,'red')
         val = val + self.get_prcss(val)#add processed data        
         #qt.msleep(0.01)
         return val
