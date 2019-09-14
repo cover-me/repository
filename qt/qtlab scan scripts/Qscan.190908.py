@@ -177,7 +177,7 @@ class easy_scan():
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,xshift=None):
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
         self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift)#check parameters
         xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
@@ -192,7 +192,7 @@ class easy_scan():
         STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
-        qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
+        qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
@@ -208,6 +208,10 @@ class easy_scan():
                 for i in np.arange(zlen):
                     g.set_val(zchan[i],zpnt[i][iz])
                 z_val0 = zpnt[0][iz]
+                if delay0>0:
+                    for i in np.arange(ylen):
+                        g.set_val(ychan[i],ypnt[i][0])
+                    qt.msleep(delay0)
                 # set y channel(s) and initialize x channel(s)
                 for iy in np.arange(yptlen):
                     t0 = time()
@@ -218,10 +222,12 @@ class easy_scan():
                         xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
                     else:
                         xpnt2 = xpnt
-                    for i in np.arange(xlen):
-                        g.set_val(xchan[i],xpnt2[i][0])
-                    # delay after setting x back to x[0]
-                    qt.msleep(delay1)
+                    if meander and iy%2==1:
+                        xpnt2 = xpnt2[:,::-1]#xpnt2[:,] = xpnt2[:,::-1] affects xpnt
+                    if delay1>0:
+                        for i in np.arange(xlen):
+                            g.set_val(xchan[i],xpnt2[i][0])
+                        qt.msleep(delay1)
                     # sweep x channels
                     is_fwd_now = True
                     is1d = (numloops==1)
@@ -281,8 +287,7 @@ class easy_scan():
                     for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
-            if delay2>0:
-                qt.msleep(delay2)
+            qt.msleep(delay2)
             #get xchans
             x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
             #take and log data
@@ -309,7 +314,7 @@ class easy_scan():
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,xshift=None):
+               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
         #check parameters
         self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
         if len(np.shape(xlbl))==0:
@@ -326,10 +331,11 @@ class easy_scan():
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
+        scanStr += "meander=True, " if meander else ''
         scanStr += "xshift=%s, "%xshift if xshift else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
-        scanStr += '), dly(%s,%s), rt(%s,%s,%s), '%(delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
+        scanStr += '), dly(%s,%s,%s), rt(%s,%s,%s), '%(delay0,delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
         self._sendToWord(scanStr)
         
         #generate points
@@ -350,7 +356,7 @@ class easy_scan():
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd,xswp_by_mchn,xshift)
+               zlbl,zchan,zpnt,bwd,xswp_by_mchn,meander,xshift)
         # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
