@@ -5,7 +5,7 @@
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
-# 19.09.08 shifted scan
+# 19.09.14 shifted scan, 3D scan, meander scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -27,16 +27,18 @@ class qtplot_client():
         self.mdata = None#mmap data which is plotted by qtplot
         self.counter = 0#real-time row number
         self.interval = interval#minimum refresh interval for qtplot
-    def set_file(self,filepath,col=0,x_pts=[],y_pts=[]):
+    def set_file(self,filepath,col=0,x_pts=[],y_pts=[],z_pts=[0]):
         if not self.mute:
             self.filepath = filepath
             if self.mmap2npy:
                 self.npy_path = os.path.join(mkdtemp(), 'qtplot_temp.npy')
                 meta_path = self.npy_path[:-3]+'meta.txt'
                 copyfile(filepath,meta_path)
-                row = len(x_pts) * len(y_pts)
+                row = len(x_pts) * len(y_pts) * len(z_pts)
                 m = np.empty((row,col))*np.nan#data matrix
-                m[:,:2] = np.vstack(np.meshgrid(x_pts,y_pts)).reshape(2,-1).T
+                m[:,0] = np.tile(x_pts,len(y_pts) * len(z_pts))
+                m[:,1] = np.tile(np.repeat(y_pts,len(x_pts)),len(z_pts))
+                m[:,2] = np.repeat(z_pts,len(x_pts) * len(y_pts))
                 np.save(self.npy_path,m)
                 self.mdata = np.load(self.npy_path, mmap_mode='r+')
     def add_data(self,values):
@@ -175,13 +177,13 @@ class easy_scan():
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,xshift=None):
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
         self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift)#check parameters
         xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
-        t_scanstart = time() 
+        t_scanstart = time()
         data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
         data_loop = [data,data_bwd]
@@ -190,8 +192,8 @@ class easy_scan():
         STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
-        qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)#only works for 1 and 2d
-        qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0])
+        qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
+        qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
@@ -206,16 +208,26 @@ class easy_scan():
                 for i in np.arange(zlen):
                     g.set_val(zchan[i],zpnt[i][iz])
                 z_val0 = zpnt[0][iz]
+                if delay0>0:
+                    for i in np.arange(ylen):
+                        g.set_val(ychan[i],ypnt[i][0])
+                    qt.msleep(delay0)
                 # set y channel(s) and initialize x channel(s)
                 for iy in np.arange(yptlen):
                     t0 = time()
                     for i in np.arange(ylen):
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
-                    for i in np.arange(xlen):
-                        g.set_val(xchan[i],xpnt[i][0])
-                    # delay after setting x back to x[0]
-                    qt.msleep(delay1)
+                    if xshift:
+                        xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
+                    else:
+                        xpnt2 = xpnt
+                    if meander and iy%2==1:
+                        xpnt2 = xpnt2[:,::-1]#xpnt2[:,] = xpnt2[:,::-1] affects xpnt
+                    if delay1>0:
+                        for i in np.arange(xlen):
+                            g.set_val(xchan[i],xpnt2[i][0])
+                        qt.msleep(delay1)
                     # sweep x channels
                     is_fwd_now = True
                     is1d = (numloops==1)
@@ -227,12 +239,9 @@ class easy_scan():
                                 qclient.compare(data.get_data())
                                 qclient.close()
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt[0][::-1],ypnt[0][::-1])
+                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0],zpnt[0])#1d data
                                 qclient.update_plot()
-                            if xshift:
-                                self._scan1d(xchan,((y_val0-xshift['y0'])/xshift['slope']+xpnt),xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
-                            else:
-                                self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
                             is_fwd_now = not is_fwd_now
                     t2 = time()
                     counter += 1
@@ -278,13 +287,12 @@ class easy_scan():
                     for i in np.arange(xlen):
                         g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
-            if delay2>0:
-                qt.msleep(delay2)
+            qt.msleep(delay2)
             #get xchans
             x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
             #take and log data
-            datavalues = [x_val0,y_val0,z_val0]+g.take_data()
-            d_item.add_data_point(*datavalues)
+            datavalues = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
+            d_item.add_data_point(*datavalues)#takes around 1 ms or less
             self._print_progress(1.*ix/xptlen,datavalues,is_fwd_now)
             if is_fwd_now or is1d:
                 qclient.add_data(datavalues)
@@ -306,7 +314,7 @@ class easy_scan():
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,xshift=None):
+               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
         #check parameters
         self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
         if len(np.shape(xlbl))==0:
@@ -318,15 +326,16 @@ class easy_scan():
 
         #send message to word
         # print2('','scan',True)#set font color
-        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps else ''
+        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
+        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
+        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
         scanStr += "bwd=True, " if bwd else ''
         scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
+        scanStr += "meander=True, " if meander else ''
         scanStr += "xshift=%s, "%xshift if xshift else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
-        scanStr += '), dly(%s,%s), rt(%s,%s,%s), '%(delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
+        scanStr += '), dly(%s,%s,%s), rt(%s,%s,%s), '%(delay0,delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
         self._sendToWord(scanStr)
         
         #generate points
@@ -347,7 +356,7 @@ class easy_scan():
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd,xswp_by_mchn,xshift)
+               zlbl,zchan,zpnt,bwd,xswp_by_mchn,meander,xshift)
         # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
@@ -442,7 +451,7 @@ class get_set():
             elif lb.startswith('fridge'):
                 val.append(ch.get_MC())
             else:
-                print2('cannot read channel: %s\n!!!'%ch,'red')
+                print2('\nCan\'t read channel: %s\n!!!'%ch,'red')
         val = val + self.get_prcss(val)#add processed data        
         #qt.msleep(0.01)
         return val
@@ -536,3 +545,4 @@ LOGO = '''
 '''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
 print2(LOGO)
 ivvi = qt.instruments.get('ivvi')
+delay0  = 0
