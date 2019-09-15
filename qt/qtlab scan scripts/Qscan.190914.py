@@ -545,3 +545,4 @@ LOGO = '''
 '''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
 print2(LOGO)
 ivvi = qt.instruments.get('ivvi')
+delay0  = 0
