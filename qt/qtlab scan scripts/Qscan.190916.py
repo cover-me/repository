@@ -1,11 +1,11 @@
-# A general scan script for qtlab
+# A all-in-one scan script for qtlab
 # modified from sudc.py by Po
 # what's new
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
-# 19.09.14 shifted scan, 3D scan, meander scan
+# 19.09.16 shifted scan, 3D scan, meander scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -147,7 +147,7 @@ class easy_scan():
             isok = False            
         if not (1==len(np.shape(zlbl))==len(np.shape(zchan))==(len(np.shape(zpnt))-1) and len(zlbl)==len(zchan)==len(zpnt)):
             isok = False
-        if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'y0' in xshift and 'shift' in xlbl[0]):
+        if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'shift' in xlbl[0] and ('y0' in xshift or 'z0' in xshift)):
             isok = False
         if xswp_by_mchn and len(xpnt[0])!=2:
             isok = False
@@ -219,7 +219,10 @@ class easy_scan():
                         g.set_val(ychan[i],ypnt[i][iy])
                     y_val0 = ypnt[0][iy]
                     if xshift:
-                        xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
+                        if 'y0' in xshift:
+                            xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
+                        elif 'z0' in xshift:
+                            xpnt2 = xpnt + (z_val0-xshift['z0'])/xshift['slope']
                     else:
                         xpnt2 = xpnt
                     if meander and iy%2==1:
@@ -315,6 +318,13 @@ class easy_scan():
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
                zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
+        """
+        Each dimension can be a list of channels or a single channel, or empty.
+        bwd: If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
+        xswp_by_mchn: Sometimes you want the magnetic field to ramp by itself and take data, instead of stepping up with a list of setpoints.
+        meander: Scan x-y channels with in a meander way.
+        xshift: Shift x channel setpoints depending on the setpoints of y (or z) with a slope.
+        """
         #check parameters
         self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
         if len(np.shape(xlbl))==0:
