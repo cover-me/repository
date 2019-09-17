@@ -1,9 +1,10 @@
-# A all-in-one scan script for qtlab
-# modified from sudc.py by Po
-# what's new
+# A(n) all-in-one scan script for qtlab
+# Project page: https://github.com/cover-me/repository
+# Upgraded from sudc.py by Po
+# Main changes:
 # 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
 # 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
-# 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan. Others.
+# 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
 # 19.09.16 shifted scan, 3D scan, meander scan
 import qt,timetrack,sys,os,socket,winsound,msvcrt
