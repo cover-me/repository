@@ -1,6 +1,7 @@
 # signal recovery 7270 lockin
 # Po, 2018
-#
+# 20191002, add frequency, tau, amplitude, sensitivity
+ 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -38,7 +39,7 @@ class instrument_usb(visa.Instrument):
             warnings.warn("given resource was not an INSTR but %s"
                           % self.resource_class, stacklevel=2)
 
-class SR7270_usb(Instrument):
+class SR7270_usb_191002(Instrument):
     '''
     This is the python driver for the signal recovery 7270 lockin (usb port).
 
@@ -67,6 +68,14 @@ class SR7270_usb(Instrument):
         self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('P', flags=Instrument.FLAG_GET, units='D', type=types.FloatType)
+        self.add_parameter('frequency', flags=Instrument.FLAG_GET, units='Hz', type=types.FloatType)
+        self.add_parameter('tau', flags=Instrument.FLAG_GET, units='s', type=types.FloatType)
+        self.add_parameter('amplitude', type=types.FloatType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET,
+            minval=0.0, maxval=5.0,
+            units='V', format='%.3f')
+        self.add_parameter('sensitivity', type=types.StringType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, units='')
         self.add_function('get_all')
         self.get_all()
 
@@ -87,6 +96,10 @@ class SR7270_usb(Instrument):
         self.get_Y()
         self.get_R()
         self.get_P()
+        self.get_frequency()
+        self.get_tau()
+        self.get_amplitude()
+        self.get_sensitivity()
         
     def read_output(self,output):
         logging.info(__name__ + ' : Reading parameter from instrument: %s ' %output)
@@ -117,5 +130,66 @@ class SR7270_usb(Instrument):
         Read out X of the Lock In
         '''
         return self.read_output('PHA')
+        
+    def _do_get_frequency(self):
+        return self.read_output('OF')
     
+    def _do_get_tau(self):
+        return self.read_output('TC')
+
+    def _do_get_amplitude(self):
+        return self.read_output('OA')
+        
+    def _do_set_amplitude(self, amplitude):
+        self._visainstrument.ask('OA. %.3f\0' % amplitude)
+        
+    def _do_set_sensitivity(self,sens):
+        '''
+        Set the sensitivuty of the LockIn
+        1-27, 2nV-5nV-10nV-....1V
+        '''
+        sens_int = int(sens)
+        if sens_int in range(1,28):
+            self._visainstrument.ask('SEN %d\0' % (sens_int))
+        else:
+            print 'Sensitivity out of range'
+
+    def _do_get_sensitivity(self):
+        '''
+        Set the sensitivuty of the LockIn
+        1-27, 2nV-5nV-10nV-....1V
+        '''
+        sensitivities = {
+        0 : "2  nV",
+        1 : "5  nV",
+        2 : "10 nV",
+        3 : "20 nV",
+        4 : "50 nV",
+        5 : "100nV",
+        6 : "200nV",
+        7 : "500nV",
+        8 : "1muV",
+        9 : "2muV",
+        10 : "5muV",
+        11 : "10muV",
+        12 : "20muV",
+        13 : "50muV",
+        14 : "100muV",
+        15 : "200muV",
+        16 : "500muV",
+        17 : "1mV",
+        18 : "2mV",
+        19 : "5mV",
+        20 : "10mV",
+        21 : "20mV",   
+        22 : "50mV",
+        23 : "100mV",
+        24 : "200mV",
+        25 : "500mV",
+        26 : "1V"
+        }
+        ans = int(self._visainstrument.ask('SEN\0')[:-4])
+        sen_label = sensitivities.get(ans-1)
+        return '%s (%s)'%(ans,sen_label) 
+        
         
