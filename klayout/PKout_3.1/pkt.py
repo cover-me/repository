@@ -1,4 +1,4 @@
-#190717
+#200311
 import os,re
 import numpy as np
 class transMatrix():#calculate traslation 3d matrix for image alignment
@@ -58,7 +58,7 @@ class transMatrix():#calculate traslation 3d matrix for image alignment
             for i in f:
                 m = None
                 if self.suffix+".tif" in i:
-                    m = re.search(".*(matrix=[^;]*).*landmarks=([^;]*).*([\d.]{4})"+self.suffix+"\.tif",i)
+                    m = re.search(".*(matrix=[^;]*).*landmarks=([^;]*).*([\d._]{4})"+self.suffix+"\.tif",i)
                 if m:
                     print "Update matrix for " + m.group(3) + self.suffix + ".tif"
                     ldMarks = self.toLandmarks(m.group(2))#land markers
