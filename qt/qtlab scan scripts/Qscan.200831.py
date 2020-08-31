@@ -7,6 +7,8 @@
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
 # 19.09.16 shifted scan, 3D scan, meander scan
+# 20.08.31 add the parameter "retakejump". remove the parameter "xswp_by_mchn"
+# todo: 1. store every componet if scanned along a vector of channels. 2. make it simpler. 3. Add a clean mode, re-take a line if there is a charge jump. 4. non uniform y points. 5. state machine
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -17,7 +19,10 @@ from shutil import copyfile, rmtree
 from tempfile import mkdtemp
 
 class qtplot_client():
-    '''A client for real-time plotting in qtplot'''
+    '''
+    A client for real-time plotting in qtplot.
+    A temp data file is created and mmap is used. Is it necessary?
+    '''
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
         self.mmap2npy = mmap2npy #whether create mmap .npy file or not
@@ -77,6 +82,10 @@ class qtplot_client():
         if self.npy_path != '':
             rmtree(os.path.split(self.npy_path)[0],ignore_errors=True)
 class easy_scan():
+    '''
+    The class for linear scans up to 3 dimensions, which means, 3 layers of for loops.
+    Each dimension of the scan can be a combination of multiple channels, such as ['dac1','dac2','dac3'].
+    '''
     def __init__(self):
         self._filename=filename
         self._datapath=datapath if datapath.endswith('\\') else (datapath+'\\')
@@ -104,7 +113,7 @@ class easy_scan():
                     x_vector,x_coordinate,x_parameter,
                     y_vector,y_coordinate,y_parameter,
                     z_vector,z_coordinate,z_parameter,bwd=False):
-        '''Generate the data file, spyview .meta file and copy scan scripts.'''
+        '''Generate the data file, spyview .meta file, and copy the .py scan script.'''
         qt.Data.set_filename_generator(self._generator)
         data = qt.Data(name=self._filename)
         self._coolabels = ['%s_(%s)'%(x_parameter,x_coordinate),'%s_(%s)'%(y_parameter,y_coordinate),'%s_(%s)'%(z_parameter,z_coordinate)]
@@ -139,7 +148,7 @@ class easy_scan():
             f.close()
         data._file.flush()
         return data
-    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift):
+    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift):
         '''check whether parameters are OK for self._scan()'''
         isok = True
         if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
@@ -150,13 +159,9 @@ class easy_scan():
             isok = False
         if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'shift' in xlbl[0] and ('y0' in xshift or 'z0' in xshift)):
             isok = False
-        if xswp_by_mchn and len(xpnt[0])!=2:
-            isok = False
         if not isok:            
             print2('_scan(): Parameter error','red')
             sys.exit()
-        if xswp_by_mchn:
-            print2('\n********WARNING********\nxswp_by_mchn=True:\n    sweeping in instruments may NOT stop after you stop or pause the program\n    output will be set to the final value in the innermost loop!!','red')
     def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
         isok = True
@@ -178,8 +183,8 @@ class easy_scan():
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
-        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xswp_by_mchn,xshift)#check parameters
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,meander=False,xshift=None,retakejump=None):
+        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift)#check parameters
         xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
@@ -245,7 +250,7 @@ class easy_scan():
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
                                 qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0],zpnt[0])#1d data
                                 qclient.update_plot()
-                            self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient)
+                            self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump)
                             is_fwd_now = not is_fwd_now
                     t2 = time()
                     counter += 1
@@ -276,32 +281,34 @@ class easy_scan():
         self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
         if self.user_interrrupt:
             sys.exit()
-    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,xswp_by_mchn,y_val0,z_val0,is1d,qclient):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
-        ix = 0 if is_fwd_now else (xptlen-1)
-        index_end = xptlen-1-ix
-        issweeping = False
-        while -1 < ix < xptlen:
+    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump=None):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
+        dataline = [] # the final 1d data, which is a 2d array
+        ix = 0 # index for x dimension scan
+        if not is_fwd_now:
+            xpnt = xpnt[:,::-1]
+        while ix < xptlen:
             #set xchans
-            if not issweeping:
-                if xswp_by_mchn:
-                    for i in np.arange(xlen):
-                        g.set_val(xchan[i],xpnt[i][index_end])
-                    issweeping = True
-                else:
-                    for i in np.arange(xlen):
-                        g.set_val(xchan[i],xpnt[i][ix])
+            for i in np.arange(xlen):
+                g.set_val(xchan[i],xpnt[i,ix])
             #delay before each point
             qt.msleep(delay2)
-            #get xchans
-            x_val0 = g.get_val(xchan[0]) if xswp_by_mchn else xpnt[0][ix]
+            #get xchan 0 for logging
+            x_val0 = xpnt[0,ix]
             #take and log data
-            datavalues = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
-            d_item.add_data_point(*datavalues)#takes around 1 ms or less
-            self._print_progress(1.*ix/xptlen,datavalues,is_fwd_now)
+            datapoint = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
+            dataline.append(datapoint)
+            if retakejump and ix > 0 and abs(dataline[-1,retakejump['index']]-dataline[-2,retakejump['index']])>retakejump['threshold']:
+                ix = 0
+                dataline = []
+                qclient.counter -= ix 
+                
+            self._print_progress(1.*ix/xptlen,datapoint,is_fwd_now)
+            
+            # update qtplot
             if is_fwd_now or is1d:
-                qclient.add_data(datavalues)
+                qclient.add_data(datapoint)
                 qclient.update_plot()
-            #
+            #  detect key pressing
             last_key = ''
             while msvcrt.kbhit():
                last_key = msvcrt.getch()
@@ -309,20 +316,17 @@ class easy_scan():
                 raise KeyboardInterrupt
             elif last_key == '\x0e':#ctrl+n(ext)
                 raise UserWarning('next')
-            #change ix
-            if xswp_by_mchn:
-                ix = 0 if xpnt[0][0]<=x_val0<=xpnt[0][-1] or xpnt[0][-1]<=x_val0<=xpnt[0][0] else -1
-            else:
-                ix += 1 if is_fwd_now else -1
+            ix += 1
+        d_item.add_data_point(dataline)
         d_item.new_block()
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False,xswp_by_mchn=False,meander=False,xshift=None):
+               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,
+               bwd=False,meander=False,xshift=None,retakejump=None):
         """
         Each dimension can be a list of channels or a single channel, or empty.
         bwd: If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
-        xswp_by_mchn: Sometimes you want the magnetic field to ramp by itself and take data, instead of stepping up with a list of setpoints.
         meander: Scan x-y channels with in a meander way.
         xshift: Shift x channel setpoints depending on the setpoints of y (or z) with a slope.
         """
@@ -341,9 +345,9 @@ class easy_scan():
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
         scanStr += "bwd=True, " if bwd else ''
-        scanStr += "xswp_by_mchn=True, " if xswp_by_mchn else ''
         scanStr += "meander=True, " if meander else ''
         scanStr += "xshift=%s, "%xshift if xshift else ''
+        scanStr += "retakejump=%s, "%retakejump if retakejump else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
         scanStr += '), dly(%s,%s,%s), rt(%s,%s,%s), '%(delay0,delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
@@ -367,7 +371,7 @@ class easy_scan():
             
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd,xswp_by_mchn,meander,xshift)
+               zlbl,zchan,zpnt,bwd,meander,xshift,retakejump)
         # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
