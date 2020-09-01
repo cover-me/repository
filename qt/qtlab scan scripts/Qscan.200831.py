@@ -289,25 +289,28 @@ class easy_scan():
         while ix < xptlen:
             #set xchans
             for i in np.arange(xlen):
-                g.set_val(xchan[i],xpnt[i,ix])
+                g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
             qt.msleep(delay2)
             #get xchan 0 for logging
-            x_val0 = xpnt[0,ix]
+            x_val0 = xpnt[0][ix]
             #take and log data
             datapoint = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
             dataline.append(datapoint)
-            if retakejump and ix > 0 and abs(dataline[-1,retakejump['index']]-dataline[-2,retakejump['index']])>retakejump['threshold']:
-                ix = 0
-                dataline = []
-                qclient.counter -= ix 
-                
-            self._print_progress(1.*ix/xptlen,datapoint,is_fwd_now)
             
+            self._print_progress(1.*ix/xptlen,datapoint,is_fwd_now)
             # update qtplot
             if is_fwd_now or is1d:
                 qclient.add_data(datapoint)
                 qclient.update_plot()
+
+            if retakejump and ix > 0 and abs(dataline[-1][retakejump['index']]-dataline[-2][retakejump['index']])>retakejump['threshold']:
+                qclient.counter -= ix+1
+                ix = 0
+                dataline = []
+            else:
+                ix += 1
+
             #  detect key pressing
             last_key = ''
             while msvcrt.kbhit():
@@ -316,7 +319,7 @@ class easy_scan():
                 raise KeyboardInterrupt
             elif last_key == '\x0e':#ctrl+n(ext)
                 raise UserWarning('next')
-            ix += 1
+
         d_item.add_data_point(dataline)
         d_item.new_block()
     def scan(self,
