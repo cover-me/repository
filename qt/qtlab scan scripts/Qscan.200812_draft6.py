@@ -148,7 +148,7 @@ class easy_scan():
             f.close()
         data._file.flush()
         return data
-    def _check_scan_para(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift,retakejump):
+    def _check_scan_para(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,bwd,meander,xshift,retakejump):
         '''check whether parameters are OK for self._scan()'''
         isok = True
         if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
@@ -157,6 +157,7 @@ class easy_scan():
             isok = False            
         if not (1==len(np.shape(zlbl))==len(np.shape(zchan))==(len(np.shape(zpnt))-1) and len(zlbl)==len(zchan)==len(zpnt)):
             isok = False
+        isok = isok and type(bwd)==bool and type(meander)==bool
         if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'shift' in xlbl[0] and ('y0' in xshift or 'z0' in xshift)):
             isok = False
         if retakejump:
@@ -171,12 +172,13 @@ class easy_scan():
                zlbl=[''],zchan=['zchannel'],zpnt=[[0]],
                bwd=False,meander=False,xshift=None,retakejump=None):
         #Initialize
-        self._check_scan_para(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift,retakejump)
+        self._check_scan_para(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,bwd,meander,xshift,retakejump)
         xlen,ylen,zlen = len(xlbl),len(ylbl),len(zlbl)
         xptlen,yptlen,zptlen = len(xpnt[0]),len(ypnt[0]),len(zpnt[0])
         counter = 0#Counter for the progress of scan
-        global STR_TIMEINFO
+        global STR_TIMEINFO,RETAKE_TIMES
         STR_TIMEINFO = '' 
+        RETAKE_TIMES = 0
         numloops = yptlen*zptlen
         is1d = (numloops==1)
         self.user_interrrupt = False
@@ -197,10 +199,10 @@ class easy_scan():
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
 
-        # print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         # print 'Labels:', self._coolabels + self._vallabels
         # print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
-        print '...\nctrl+e: exit script safely; ctrl+n: go to next scan.'
+        print '...\nExit script: ctrl+e (safer) or ctrl+c; Go to next scan: ctrl+n; Help: help(e.scan)'
         
         ############# scan #############
         try:
@@ -274,7 +276,8 @@ class easy_scan():
         t_scan = (time()-t_scanstart)/60
         dfname = data.get_filename().replace('.dat','')
         dfname_bwd = '/%s'%data_bwd.get_filename().replace('.dat','') if data_bwd else ''
-        self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
+        _ = ', %s'%RETAKE_TIMES if retakejump else ''
+        self._sendToWord('%.1f, %s%s%s<return>'%(t_scan,dfname,dfname_bwd,RETAKE_TIMES),addTimestamp=False)
         #Check user_interrrupt
         if self.user_interrrupt:
             sys.exit()
@@ -283,6 +286,7 @@ class easy_scan():
         data_line = []#Data "line" returned by 1d scan
         ix = 0#Index of x setpoints
         try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
+        global RETAKE_TIMES
         if not is_fwd_now:#Sweep backward
             xpnt = xpnt[:,::-1]
         while ix < xptlen:
@@ -311,6 +315,7 @@ class easy_scan():
                 if len(d_item.get_data())>= xptlen:
                     isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xptlen+ix][r_ind]) > r_y
                 if isjump:
+                    RETAKE_TIMES += 1
                     qclient.counter -= ix+1#Reset qclient counter
                     ix = -1
                     data_line = []
@@ -328,7 +333,8 @@ class easy_scan():
             elif last_key == '\x0e':#ctrl+n(ext)
                 raise UserWarning('next')
         if retakejump:
-            d_item.add_data_point(data_line)
+            for i in data_line:
+                d_item.add_data_point(*i)
         d_item.new_block()
 
     def get_scan_str(self,
@@ -584,6 +590,7 @@ def print2(s,style='',hold=False):
     
 TERM_WIDTH = get_term_width()-1
 STR_TIMEINFO=''
+RETAKE_TIMES=0
 LOGO = '''
 %s\033[1;31m  __   ____   ___   __   __ _
 %s\033[1;31m /  \ / ___) / __) / _\ (  ( \ 
