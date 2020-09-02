@@ -243,7 +243,7 @@ class easy_scan():
                     t1 = time()
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
-                            if is_fwd_now==False and is1d:
+                            if is_fwd_now==False and is1d:# If the scan is 1d, plot the realtime backward data as well. Otherwise only forward data is plotted in realtime. 
                                 print
                                 qclient.compare(data.get_data())
                                 qclient.close()
@@ -281,13 +281,14 @@ class easy_scan():
         self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
         if self.user_interrrupt:
             sys.exit()
-    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump=None):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
-        dataline = [] # the final 1d data, which is a 2d array
-        ix = 0 # index for x dimension scan
-        if not is_fwd_now:
+    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
+        data_line = []# Data "line" returned by 1d scan
+        ix = 0# Index of x setpoints
+        try_times = 0 # Trying times of retaking the 1d scan due to charge jumps
+        if not is_fwd_now:# Sweep backward
             xpnt = xpnt[:,::-1]
         while ix < xptlen:
-            #set xchans
+            # Set x dimension channels
             for i in np.arange(xlen):
                 g.set_val(xchan[i],xpnt[i][ix])
             #delay before each point
@@ -295,20 +296,29 @@ class easy_scan():
             #get xchan 0 for logging
             x_val0 = xpnt[0][ix]
             #take and log data
-            datapoint = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
-            dataline.append(datapoint)
-            
-            self._print_progress(1.*ix/xptlen,datapoint,is_fwd_now)
+            data_point = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
+
+            self._print_progress(1.*ix/xptlen,data_point,is_fwd_now)
             # update qtplot
             if is_fwd_now or is1d:
-                qclient.add_data(datapoint)
+                qclient.add_data(data_point)
                 qclient.update_plot()
-
-            if retakejump and ix > 0 and abs(dataline[-1][retakejump['index']]-dataline[-2][retakejump['index']])>retakejump['threshold']:
-                qclient.counter -= ix+1
-                ix = 0
-                dataline = []
-            else:
+            
+            if retakejump and try_times < retakejump['max_try_times']:
+                data_line.append(data_point)
+                r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
+                isjump = ix > 0 and abs(data_line[ix][r_ind]-data_line[ix-1][r_ind]) > r_x
+                if len(d_item.get_data())>= xptlen:
+                    isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xptlen+ix][r_ind]) > r_y
+                if isjump:
+                    qclient.counter -= ix+1# reset qclient counter
+                    ix = 0# reset data_point counter
+                    data_line = []
+                    try_times += 1
+                else:
+                    ix += 1
+            else:#if retakejump, data can only be saved to the file after the whole line is finished
+                d_item.add_data_point(*data_point)
                 ix += 1
 
             #  detect key pressing
@@ -319,8 +329,8 @@ class easy_scan():
                 raise KeyboardInterrupt
             elif last_key == '\x0e':#ctrl+n(ext)
                 raise UserWarning('next')
-
-        d_item.add_data_point(dataline)
+        if retakejump:
+            d_item.add_data_point(data_line)
         d_item.new_block()
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
