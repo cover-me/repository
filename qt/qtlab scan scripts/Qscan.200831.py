@@ -282,28 +282,30 @@ class easy_scan():
         if self.user_interrrupt:
             sys.exit()
     def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
-        data_line = []# Data "line" returned by 1d scan
-        ix = 0# Index of x setpoints
-        try_times = 0 # Trying times of retaking the 1d scan due to charge jumps
-        if not is_fwd_now:# Sweep backward
+        data_line = []#Data "line" returned by 1d scan
+        ix = 0#Index of x setpoints
+        try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
+        if not is_fwd_now:#Sweep backward
             xpnt = xpnt[:,::-1]
         while ix < xptlen:
-            # Set x dimension channels
+            #Set x dimension channels
             for i in np.arange(xlen):
                 g.set_val(xchan[i],xpnt[i][ix])
-            #delay before each point
+            #Delay(2) before each readpoint
             qt.msleep(delay2)
-            #get xchan 0 for logging
+            #Get xchan 0 setpoint for logging
             x_val0 = xpnt[0][ix]
-            #take and log data
+            #Get data_point
             data_point = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
-
+            
+            #Print to console, update qtplot
             self._print_progress(1.*ix/xptlen,data_point,is_fwd_now)
-            # update qtplot
             if is_fwd_now or is1d:
                 qclient.add_data(data_point)
                 qclient.update_plot()
             
+            #If want to retake data_line when there is a jump, data will be saved to the file after the whole line is taken
+            #otherwise data is saved point by point
             if retakejump and try_times < retakejump['max_try_times']:
                 data_line.append(data_point)
                 r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
@@ -311,17 +313,15 @@ class easy_scan():
                 if len(d_item.get_data())>= xptlen:
                     isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xptlen+ix][r_ind]) > r_y
                 if isjump:
-                    qclient.counter -= ix+1# reset qclient counter
-                    ix = 0# reset data_point counter
+                    qclient.counter -= ix+1#Reset qclient counter
+                    ix = -1
                     data_line = []
                     try_times += 1
-                else:
-                    ix += 1
-            else:#if retakejump, data can only be saved to the file after the whole line is finished
+            else:
                 d_item.add_data_point(*data_point)
-                ix += 1
+            ix += 1
 
-            #  detect key pressing
+            #Detect key pressing
             last_key = ''
             while msvcrt.kbhit():
                last_key = msvcrt.getch()
