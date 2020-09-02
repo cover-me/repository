@@ -148,7 +148,7 @@ class easy_scan():
             f.close()
         data._file.flush()
         return data
-    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift):
+    def _check_scan_para(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift,retakejump):
         '''check whether parameters are OK for self._scan()'''
         isok = True
         if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
@@ -159,54 +159,49 @@ class easy_scan():
             isok = False
         if xshift and not ('slope' in xshift and xshift['slope']!=0 and 'shift' in xlbl[0] and ('y0' in xshift or 'z0' in xshift)):
             isok = False
+        if retakejump:
+            isok = isok and all([i in retakejump for i in ['index','threshold_x','threshold_y','max_try_times']])
         if not isok:            
             print2('_scan(): Parameter error','red')
             sys.exit()
-    def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
-        '''check whether parameters are OK for self.scan()'''
-        isok = True
-        if not len(np.shape(xlbl))==len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
-            isok = False
-        if not len(np.shape(ylbl))==len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
-            isok = False
-        if not len(np.shape(zlbl))==len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
-            isok = False
-        if len(np.shape(xlbl))==1 and not len(xlbl)==len(xchan)==len(xstart)==len(xend):
-            isok = False
-        if len(np.shape(ylbl))==1 and not len(ylbl)==len(ychan)==len(ystart)==len(yend):
-            isok = False
-        if len(np.shape(zlbl))==1 and not len(zlbl)==len(zchan)==len(zstart)==len(zend):
-            isok = False
-        if not isok:
-            print2('scan(): Parameter error','red')
-            sys.exit()
+
     def _scan(self,
                xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
                ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False,meander=False,xshift=None,retakejump=None):
-        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift)#check parameters
-        xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
-        xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
-        #start
-        qt.mstart()
-        t_scanstart = time()
-        data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
-        data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
-        data_loop = [data,data_bwd]
-        counter = 0#counter for scan
+               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],
+               bwd=False,meander=False,xshift=None,retakejump=None):
+        #Initialize
+        self._check_scan_para(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,xshift,retakejump)
+        xlen,ylen,zlen = len(xlbl),len(ylbl),len(zlbl)
+        xptlen,yptlen,zptlen = len(xpnt[0]),len(ypnt[0]),len(zpnt[0])
+        counter = 0#Counter for the progress of scan
         global STR_TIMEINFO
         STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
+        is1d = (numloops==1)
+        self.user_interrrupt = False
+
+        #Start
+        qt.mstart()
+        t_scanstart = time()
+        
+        #qtlab Data objects
+        data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
+        data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
+        data_loop = [data,data_bwd]
         dfpath = data.get_filepath()
+        dfpath_bwd = data_bwd.get_filepath() if bwd else None
+        
+        #qtplot communication object
         qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
-        dfpath_bwd = data_bwd.get_filepath() if bwd else None
-        print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
-        print 'Labels:', self._coolabels + self._vallabels
-        print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
-        print '...\nctrl+e: exit more safely; ctrl+n: next scan.'
-        self.user_interrrupt = False
+
+        # print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
+        # print 'Labels:', self._coolabels + self._vallabels
+        # print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
+        print '...\nctrl+e: exit script safely; ctrl+n: go to next scan.'
+        
         ############# scan #############
         try:
             # set z channel(s)
@@ -239,7 +234,6 @@ class easy_scan():
                         qt.msleep(delay1)
                     # sweep x channels
                     is_fwd_now = True
-                    is1d = (numloops==1)
                     t1 = time()
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
@@ -268,19 +262,23 @@ class easy_scan():
             if d_item:
                 d_item._write_settings_file()# Overwrite the settings file created at the beginning, this ensures updating the sweep variable with the latest value
                 d_item.close_file()
+        #Close qtplot client
         if bwd==True and is1d:
             qclient.compare(data_bwd.get_data())
         else:
             qclient.compare(data.get_data())
         qclient.close()
         qt.mend()
-        t_scan = (time()-t_scanstart)/60
+        #Send scan info 2 to Word
         print 'Scan finished.'
+        t_scan = (time()-t_scanstart)/60
         dfname = data.get_filename().replace('.dat','')
         dfname_bwd = '/%s'%data_bwd.get_filename().replace('.dat','') if data_bwd else ''
         self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
+        #Check user_interrrupt
         if self.user_interrrupt:
             sys.exit()
+
     def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
         data_line = []#Data "line" returned by 1d scan
         ix = 0#Index of x setpoints
@@ -332,6 +330,44 @@ class easy_scan():
         if retakejump:
             d_item.add_data_point(data_line)
         d_item.new_block()
+
+    def get_scan_str(self,
+            xlbl,xchan,xstart,xend,xsteps,
+            ylbl,ychan,ystart,yend,ysteps,
+            zlbl,zchan,zstart,zend,zsteps,
+            bwd,meander,xshift,retakejump):
+        # print2('','scan',True)#set font color
+        scan_str = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
+        scan_str += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
+        scan_str += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
+        scan_str += "bwd=True, " if bwd else ''
+        scan_str += "meander=True, " if meander else ''
+        scan_str += "xshift=%s, "%xshift if xshift else ''
+        scan_str += "retakejump=%s, "%retakejump if retakejump else ''
+        if scan_str[-2:] == ", ":#drop last ', ' away
+            scan_str = scan_str[:-2]
+        scan_str += '), dly(%s,%s,%s), rt(%s,%s,%s), '%(delay0,delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
+        return scan_str
+        
+    def start_end_to_setpoints(self,lbl,chan,start,end,steps):
+        #Check if lbl,chan,start,end are all 0D or all 1D
+        if not len(np.shape(lbl))==len(np.shape(chan))==len(np.shape(start))== len(np.shape(end))<2:
+            print2('Scan parameter error (1)','red')
+            sys.exit()
+        #If they are all 0D, make them 1D
+        if len(np.shape(lbl))==0:
+            lbl=[lbl];chan=[chan];start=[start];end=[end]
+        #The length should also be the same
+        if not len(lbl)==len(chan)==len(start)==len(end):
+            print2('Scan parameter error (2)','red')
+            sys.exit()
+        #Generate setpoints
+        chnum = len(chan)
+        pnt = np.zeros((chnum,steps+1))
+        for i in np.arange(chnum):
+            pnt[i] = np.linspace(start[i],end[i],steps+1)
+        return lbl,chan,pnt
+
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
@@ -339,65 +375,48 @@ class easy_scan():
                bwd=False,meander=False,xshift=None,retakejump=None):
         """
         Each dimension can be a list of channels or a single channel, or empty.
-        bwd: If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
-        meander: Scan x-y channels with in a meander way.
-        xshift: Shift x channel setpoints depending on the setpoints of y (or z) with a slope.
+        bwd:
+            Bool. If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
+        meander:
+            Bool. Scan x-y channels with in a meander way.
+        xshift:
+            None, {'y0':xxx,'slope':xxx} or {'z0':xxx,'slope':xxx}.
+            If not none, there must be 'shift' in xlbl[0] to pass parameter checking. 
+            Shift x channel setpoints depending on the y (or z) setpoint with a given slope.
+        retakejump:
+            None or {'index':xxx,'threshold_x':xxx,'threshold_y':xxx,'max_try_times':xxx}.
+            Retake a data line if there is a (charge) jump. 
         """
-        #check parameters
-        self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
-        if len(np.shape(xlbl))==0:
-            xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
-        if len(np.shape(ylbl))==0:
-            ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
-        if len(np.shape(zlbl))==0:
-            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
-
-        #send message to word
-        # print2('','scan',True)#set font color
-        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
-        scanStr += "bwd=True, " if bwd else ''
-        scanStr += "meander=True, " if meander else ''
-        scanStr += "xshift=%s, "%xshift if xshift else ''
-        scanStr += "retakejump=%s, "%retakejump if retakejump else ''
-        if scanStr[-2:] == ", ":#drop last ', ' away
-            scanStr = scanStr[:-2]
-        scanStr += '), dly(%s,%s,%s), rt(%s,%s,%s), '%(delay0,delay1,delay2,g.get_rate(xchan[0]),g.get_rate(ychan[0]),g.get_rate(zchan[0]))
-        self._sendToWord(scanStr)
+        #Send scan information to Word
+        scan_str = self.get_scan_str(
+                        xlbl,xchan,xstart,xend,xsteps,
+                        ylbl,ychan,ystart,yend,ysteps,
+                        zlbl,zchan,zstart,zend,zsteps,
+                        bwd,meander,xshift,retakejump)
+        self._sendToWord(scan_str)
         
-        #generate points
-        xchnum = len(xchan)
-        xpnt = np.zeros((xchnum,xsteps+1))
-        for i in np.arange(xchnum):
-            xpnt[i] = np.linspace(xstart[i],xend[i],xsteps+1)
-            
-        ychnum = len(ychan)
-        ypnt = np.zeros((ychnum,ysteps+1))
-        for i in np.arange(ychnum):
-            ypnt[i] = np.linspace(ystart[i],yend[i],ysteps+1)
-            
-        zchnum = len(zchan)
-        zpnt = np.zeros((zchnum,zsteps+1))
-        for i in np.arange(zchnum):
-            zpnt[i] = np.linspace(zstart[i],zend[i],zsteps+1)
-            
+        #Generate setpoints, for _scan()
+        xlbl,xchan,xpnt = self.start_end_to_setpoints(xlbl,xchan,xstart,xend,xsteps)
+        ylbl,ychan,ypnt = self.start_end_to_setpoints(ylbl,ychan,ystart,yend,ysteps)
+        zlbl,zchan,zpnt = self.start_end_to_setpoints(zlbl,zchan,zstart,zend,zsteps)
+
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd,meander,xshift,retakejump)
-        # print2('','')#set font to default
+
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
+
     def set(self,chan,val):
         # print2('','set',True)#set font color
-        scanStr = "e.set('%s',%s)"%(chan,val)
+        scan_str = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
                 g.set_val(i,val)
         elif chan.endswith('_rate'):
             chan0 = chan[:-5]
             delay = 30
-            scanStr += ', %s ms'%delay
+            scan_str += ', %s ms'%delay
             if chan0 == 'ivvi':
                 for i in ivvi.get_parameter_names():
                     ivvi.set_parameter_rate(i,val,delay)
@@ -405,7 +424,7 @@ class easy_scan():
                     ivvi.set_parameter_rate(chan0,val,delay)
         else:
             g.set_val(chan,val)
-        self._sendToWord(scanStr+'<return>')
+        self._sendToWord(scan_str+'<return>')
         # print2('','')#set font to default
         print
     def more_scan(self,script_path):
