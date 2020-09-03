@@ -205,9 +205,15 @@ class easy_scan():
         qclient.update_plot()
 
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
-        # print 'Labels:', self._coolabels + self._vallabels
-        # print 'Scan: %d lines, %d points per line'%(numloops,xpt_num)
-        print '...\nExit script: ctrl+e (safer) or ctrl+c; Go to next scan: ctrl+n; Help: help(e.scan)'
+        print 'Labels:', ', '.join([i['name'] for i in data.get_dimensions()])
+        print 'Size: %d lines, %d points per line'%(numloops,xpt_num)
+        print '-'*24+' Scan started '+'-'*24
+        print 'Emergency stop: Press ctrl+c, then manually stop channels that are still changing (magnet), update channel values with xxx.get_xxx() if they are not right. ctrl+c stops the script immediately, there may be unread messages in instrument buffers.'
+        print 'Exit script: ctrl+e. Program waits until setting values (field, dac... ) reached, then closes resources and exits; Better than ctrl+c if not in emergencies.'
+        print 'Go to next scan: ctrl+n;'
+        print 'Pause: Select text by \'shift\' and left mouse keys. It will block the script.'
+        print 'Help: help(e.scan)'
+        print 'First two numbers below are elapsed time of each datapoint, and remaining time (in min)'
         
         ############# scan #############
         try:
@@ -280,7 +286,7 @@ class easy_scan():
         qclient.close()
         qt.mend()
         #Send scan info 2 to Word
-        print 'Scan finished.'
+        print '-'*24+' Scan finished '+'-'*24
         t_scan = (time()-t_scanstart)/60
         dfname = data.get_filename().replace('.dat','')
         dfname_bwd = '/%s'%data_bwd.get_filename().replace('.dat','') if data_bwd else ''
@@ -296,7 +302,7 @@ class easy_scan():
         try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
         xchan_num = len(xpnt)
         xpnt_num = len(xpnt[0])
-        global RETAKE_TIMES
+        global RETAKE_TIMES, RETAKE_MAX_REACHED
         while ix < xpnt_num:
             #Set x dimension channels
             for i in np.arange(xchan_num):
@@ -325,7 +331,7 @@ class easy_scan():
                 data_line.append(data_point)
                 r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
                 isjump = ix > 0 and abs(data_line[ix][r_ind]-data_line[ix-1][r_ind]) > r_x
-                if len(d_item.get_data())>= xpnt_num:
+                if (not RETAKE_MAX_REACHED) and len(d_item.get_data())>= xpnt_num:
                     isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xpnt_num+ix][r_ind]) > r_y
                 if isjump:
                     RETAKE_TIMES += 1
@@ -348,6 +354,7 @@ class easy_scan():
         if retakejump:
             for i in data_line:
                 d_item.add_data_point(*i)
+            RETAKE_MAX_REACHED = try_times >= retakejump['max_try_times']
         d_item.new_block()
 
     def get_scan_str(self,
@@ -604,6 +611,7 @@ def print2(s,style='',hold=False):
 TERM_WIDTH = get_term_width()-1
 STR_TIMEINFO=''
 RETAKE_TIMES=0
+RETAKE_MAX_REACHED=False
 LOGO = '''
 %s\033[1;31m  __   ____   ___   __   __ _
 %s\033[1;31m /  \ / ___) / __) / _\ (  ( \ 
