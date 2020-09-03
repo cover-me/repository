@@ -290,7 +290,7 @@ class easy_scan():
         if self.user_interrrupt:
             sys.exit()
 
-    def _scan1d(self,xchan,xpnt,y_n,z_n,d_item,is_fwd_now,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
+    def _scan1d(self,xchan,xpnt,y_iy,z_iz,d_item,is_fwd_now,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
         data_line = []#Data "line" returned by 1d scan
         ix = 0#Index of x setpoints
         try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
@@ -305,13 +305,13 @@ class easy_scan():
             qt.msleep(delay2)
 
             #Get data_point
-            data_point = [xpnt[0,ix],y_n[0],z_n[0]]+g.take_data()#takes tens of ms
+            data_point = [xpnt[0,ix],y_iy[0],z_iz[0]]+g.take_data()#takes tens of ms
             if xchan_num > 1:
                 data_point += xpnt[1:,ix]
-            if len(y_n)>1:
-                data_point += y_n[1:]
-            if len(z_n)>1:
-                data_point += z_n[1:]
+            if len(y_iy)>1:
+                data_point += y_iy[1:]
+            if len(z_iz)>1:
+                data_point += z_iz[1:]
             
             #Print to console, update qtplot
             self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now)
