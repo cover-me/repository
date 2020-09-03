@@ -7,8 +7,8 @@
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
 # 19.09.16 shifted scan, 3D scan, meander scan
-# 20.08.31 add the parameter "retakejump". remove the parameter "xswp_by_mchn"
-# todo: 1. store every componet if scanned along a vector of channels. 2. make it simpler. 3. Add a clean mode, re-take a line if there is a charge jump. 4. non uniform y points. 5. state machine
+# 20.08.31 add the parameter "retakejump". remove the parameter "xswp_by_mchn". Store all channels if scanned along a vector of channels.
+# todo: 2. make it simpler. 4. non uniform y points. 5. state machine
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -20,8 +20,8 @@ from tempfile import mkdtemp
 
 class qtplot_client():
     '''
-    A client for real-time plotting in qtplot.
-    A temp data file is created and mmap is used. Is it necessary?
+    A client for real-time plotting in qtplot
+    A temp data file is created and mmap is used
     '''
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
         self.mute = mute #mute the client or not
@@ -91,7 +91,7 @@ class easy_scan():
         self._datapath=datapath if datapath.endswith('\\') else (datapath+'\\')
         self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)#data number generator
         self._vallabels = g.get_vallabels()#value labels, [reading1, reading2, reading3, ..]
-        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]. Here, the first 3 column are called coordinators, the rest are called values.
+
     def _print_progress(self,x,values,is_fwd_now):
         '''print the progress bar as well as readings to the console. The bar looks like (__?______?__)'''
         pbar_width = 5
@@ -101,7 +101,8 @@ class easy_scan():
         progress_bar =  '('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
         progress_bar = '\r' + STR_TIMEINFO + progress_bar
-        print progress_bar[:TERM_WIDTH],    
+        print progress_bar[:TERM_WIDTH],
+ 
     def _sendToWord(self,msg,addTimestamp=True):
         towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
         if os.path.isfile(towordPath):
@@ -109,36 +110,41 @@ class easy_scan():
             os.system('%s'%towordPath+' "%s"'%_)
         else:
             print2('toWord: Can not find toWord.exe\n','red')
-    def _create_data(self,
-                    x_vector,x_coordinate,x_parameter,
-                    y_vector,y_coordinate,y_parameter,
-                    z_vector,z_coordinate,z_parameter,bwd=False):
+
+    def _create_data(self,xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan):
         '''Generate the data file, spyview .meta file, and copy the .py scan script.'''
         qt.Data.set_filename_generator(self._generator)
-        data = qt.Data(name=self._filename)
-        self._coolabels = ['%s_(%s)'%(x_parameter,x_coordinate),'%s_(%s)'%(y_parameter,y_coordinate),'%s_(%s)'%(z_parameter,z_coordinate)]
-        (xstart,xend) = (x_vector[-1],x_vector[0]) if bwd else (x_vector[0],x_vector[-1])
-        data.add_coordinate(self._coolabels[0],
-                            size=len(x_vector),
-                            start=xstart,
-                            end=xend) 
-        data.add_coordinate(self._coolabels[1],
-                            size=len(y_vector),
-                            start=y_vector[0],
-                            end=y_vector[-1]) 
-        data.add_coordinate(self._coolabels[2],
-                            size=len(z_vector),
-                            start=z_vector[0],
-                            end=z_vector[-1])
-        for i in self._vallabels:
-            data.add_value(i)#add value labels
+        data = qt.Data(name=self._filename)#qtlab data object
+        
+        setpoint_label_x = ['%s_(%s)'%(i,j) for i,j in zip(xchan,xlbl)]
+        setpoint_label_y = ['%s_(%s)'%(i,j) for i,j in zip(ychan,ylbl)]
+        setpoint_label_z = ['%s_(%s)'%(i,j) for i,j in zip(zchan,zlbl)]        
+        setpoint_labels = [setpoint_label_x[0],setpoint_label_y[0],setpoint_label_z[0]]
+        getpoint_labels = self._vallabels
+        if len(setpoint_label_x)>1:
+            getpoint_labels += setpoint_label_x[1:]
+        if len(setpoint_label_y)>1:
+            getpoint_labels += setpoint_label_y[1:]
+        if len(setpoint_label_z)>1:
+            getpoint_labels += setpoint_label_z[1:]
+            
+        for i,j in zip(setpoint_labels,[xpnt,ypnt,zpnt]):
+            _ = j[0]
+            data.add_coordinate(i,size=len(_),start=_[0],end=_[-1]) 
+        for i in getpoint_labels:
+            data.add_value(i)
+            
         data.create_file()#Create data file
         SpyView(data).write_meta_file()#Create meta.txt file for spyview
+        data._file.flush()
+
+        #copy this file if not copied before
         qscan_file_path = sys._getframe().f_code.co_filename
         qscan_copyto_path = os.path.join(data._dir,os.path.split(qscan_file_path)[1])
         if not os.path.isfile(qscan_copyto_path):
             print 'Copy file:', qscan_file_path
             copyfile(qscan_file_path,qscan_copyto_path)
+        #copy and rename scan script
         to_script_path = "%s\\%s_%s.py" % (data._dir,self._filename,str(self._generator._counter-1))
         if os.path.isfile(this_file_path):
             copyfile(this_file_path,to_script_path)
@@ -146,7 +152,7 @@ class easy_scan():
             f = open(to_script_path,'w')
             f.write(this_file_path)#It's a code string if the function is called by more_scan()
             f.close()
-        data._file.flush()
+            
         return data
     def _check_scan_para(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,bwd,meander,xshift,retakejump):
         '''check whether parameters are OK for self._scan()'''
@@ -173,13 +179,12 @@ class easy_scan():
                bwd=False,meander=False,xshift=None,retakejump=None):
         #Initialize
         self._check_scan_para(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt,bwd,meander,xshift,retakejump)
-        xlen,ylen,zlen = len(xlbl),len(ylbl),len(zlbl)
-        xptlen,yptlen,zptlen = len(xpnt[0]),len(ypnt[0]),len(zpnt[0])
+        xpt_num,ypt_num,zpt_num = len(xpnt[0]),len(ypnt[0]),len(zpnt[0])
         counter = 0#Counter for the progress of scan
         global STR_TIMEINFO,RETAKE_TIMES
         STR_TIMEINFO = '' 
         RETAKE_TIMES = 0
-        numloops = yptlen*zptlen
+        numloops = ypt_num*zpt_num
         is1d = (numloops==1)
         self.user_interrrupt = False
 
@@ -188,8 +193,8 @@ class easy_scan():
         t_scanstart = time()
         
         #qtlab Data objects
-        data = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0])# create data file, spyview metafile, copy script
-        data_bwd = self._create_data(xpnt[0],xlbl[0],xchan[0],ypnt[0],ylbl[0],ychan[0],zpnt[0],zlbl[0],zchan[0],bwd) if bwd else None
+        data = self._create_data(xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan)# create data file, spyview metafile, copy script
+        data_bwd = self._create_data(xpnt[:,::-1],xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan) if bwd else None
         data_loop = [data,data_bwd]
         dfpath = data.get_filepath()
         dfpath_bwd = data_bwd.get_filepath() if bwd else None
@@ -201,38 +206,40 @@ class easy_scan():
 
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         # print 'Labels:', self._coolabels + self._vallabels
-        # print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
+        # print 'Scan: %d lines, %d points per line'%(numloops,xpt_num)
         print '...\nExit script: ctrl+e (safer) or ctrl+c; Go to next scan: ctrl+n; Help: help(e.scan)'
         
         ############# scan #############
         try:
             # set z channel(s)
-            for iz in np.arange(zptlen):
-                for i in np.arange(zlen):
-                    g.set_val(zchan[i],zpnt[i][iz])
-                z_val0 = zpnt[0][iz]
+            for iz in np.arange(zpt_num):
+                z_iz = zpnt[:,iz]
+                for i,j in zip(zchan,z_iz):
+                    g.set_val(i,j)
                 if delay0>0:
-                    for i in np.arange(ylen):
-                        g.set_val(ychan[i],ypnt[i][0])
+                    y_iy = ypnt[:,0]
+                    for i,j in zip(ychan,y_iy):
+                        g.set_val(i,j)
                     qt.msleep(delay0)
                 # set y channel(s) and initialize x channel(s)
-                for iy in np.arange(yptlen):
+                for iy in np.arange(ypt_num):
                     t0 = time()
-                    for i in np.arange(ylen):
-                        g.set_val(ychan[i],ypnt[i][iy])
-                    y_val0 = ypnt[0][iy]
+                    y_iy = ypnt[:,iy]
+                    for i,j in zip(ychan,y_iy):
+                        g.set_val(i,j)
+
                     if xshift:
                         if 'y0' in xshift:
-                            xpnt2 = xpnt + (y_val0-xshift['y0'])/xshift['slope']
+                            xpnt2 = xpnt + (y_iy[0]-xshift['y0'])/xshift['slope']
                         elif 'z0' in xshift:
-                            xpnt2 = xpnt + (z_val0-xshift['z0'])/xshift['slope']
+                            xpnt2 = xpnt + (z_iz[0]-xshift['z0'])/xshift['slope']
                     else:
                         xpnt2 = xpnt
                     if meander and iy%2==1:
                         xpnt2 = xpnt2[:,::-1]#xpnt2[:,] = xpnt2[:,::-1] affects xpnt
                     if delay1>0:
-                        for i in np.arange(xlen):
-                            g.set_val(xchan[i],xpnt2[i][0])
+                        for i,j in zip(xchan,xpnt2[:,0]):
+                            g.set_val(i,j)
                         qt.msleep(delay1)
                     # sweep x channels
                     is_fwd_now = True
@@ -243,14 +250,15 @@ class easy_scan():
                                 print
                                 qclient.compare(data.get_data())
                                 qclient.close()
-                                qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0][::-1],ypnt[0],zpnt[0])#1d data
+                                qclient = qtplot_client(mute=(zpt_num!=1),mmap2npy=True)
+                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0],ypnt[0],zpnt[0])#1d data
                                 qclient.update_plot()
-                            self._scan1d(xchan,xpnt2,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump)
+                            self._scan1d(xchan,xpnt2,y_iy,z_iz,d_item,is_fwd_now,is1d,qclient,retakejump)
                             is_fwd_now = not is_fwd_now
+                            xpnt2 = xpnt2[:,::-1]
                     t2 = time()
                     counter += 1
-                    STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xptlen,(t2-t0)*(numloops-counter)/60)
+                    STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xpt_num,(t2-t0)*(numloops-counter)/60)
         ############# end scan #############
         except UserWarning as warning:
             if warning.message=='next':
@@ -277,31 +285,36 @@ class easy_scan():
         dfname = data.get_filename().replace('.dat','')
         dfname_bwd = '/%s'%data_bwd.get_filename().replace('.dat','') if data_bwd else ''
         _ = ', %s'%RETAKE_TIMES if retakejump else ''
-        self._sendToWord('%.1f, %s%s%s<return>'%(t_scan,dfname,dfname_bwd,RETAKE_TIMES),addTimestamp=False)
+        self._sendToWord('%.1f, %s%s%s<return>'%(t_scan,dfname,dfname_bwd,_),addTimestamp=False)
         #Check user_interrrupt
         if self.user_interrrupt:
             sys.exit()
 
-    def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val0,z_val0,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
+    def _scan1d(self,xchan,xpnt,y_n,z_n,d_item,is_fwd_now,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
         data_line = []#Data "line" returned by 1d scan
         ix = 0#Index of x setpoints
         try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
+        xchan_num = len(xpnt)
+        xpnt_num = len(xpnt[0])
         global RETAKE_TIMES
-        if not is_fwd_now:#Sweep backward
-            xpnt = xpnt[:,::-1]
-        while ix < xptlen:
+        while ix < xpnt_num:
             #Set x dimension channels
-            for i in np.arange(xlen):
-                g.set_val(xchan[i],xpnt[i][ix])
+            for i in np.arange(xchan_num):
+                g.set_val(xchan[i],xpnt[i,ix])
             #Delay(2) before each readpoint
             qt.msleep(delay2)
-            #Get xchan 0 setpoint for logging
-            x_val0 = xpnt[0][ix]
+
             #Get data_point
-            data_point = [x_val0,y_val0,z_val0]+g.take_data()#takes tens of ms
+            data_point = [xpnt[0,ix],y_n[0],z_n[0]]+g.take_data()#takes tens of ms
+            if xchan_num > 1:
+                data_point += xpnt[1:,ix]
+            if len(y_n)>1:
+                data_point += y_n[1:]
+            if len(z_n)>1:
+                data_point += z_n[1:]
             
             #Print to console, update qtplot
-            self._print_progress(1.*ix/xptlen,data_point,is_fwd_now)
+            self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now)
             if is_fwd_now or is1d:
                 qclient.add_data(data_point)
                 qclient.update_plot()
@@ -312,8 +325,8 @@ class easy_scan():
                 data_line.append(data_point)
                 r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
                 isjump = ix > 0 and abs(data_line[ix][r_ind]-data_line[ix-1][r_ind]) > r_x
-                if len(d_item.get_data())>= xptlen:
-                    isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xptlen+ix][r_ind]) > r_y
+                if len(d_item.get_data())>= xpnt_num:
+                    isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xpnt_num+ix][r_ind]) > r_y
                 if isjump:
                     RETAKE_TIMES += 1
                     qclient.counter -= ix+1#Reset qclient counter
