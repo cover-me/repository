@@ -123,7 +123,7 @@ class easy_scan():
         setpoint_label_y = ['%s_(%s)'%(i,j) for i,j in zip(ychan,ylbl)]
         setpoint_label_z = ['%s_(%s)'%(i,j) for i,j in zip(zchan,zlbl)]        
         setpoint_labels = [setpoint_label_x[0],setpoint_label_y[0],setpoint_label_z[0]]
-        getpoint_labels = self._vallabels
+        getpoint_labels = self._vallabels[:]#be careful, use list[:] to hard copy!
         if len(setpoint_label_x)>1:
             getpoint_labels += setpoint_label_x[1:]
         if len(setpoint_label_y)>1:
@@ -204,7 +204,7 @@ class easy_scan():
         
         #qtplot communication object
         qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
-        qclient.set_file(dfpath,3+len(self._vallabels),xpnt[0],ypnt[0],zpnt[0])
+        qclient.set_file(dfpath,len(self._vallabels)+len(xchan)+len(ychan)+len(zchan),xpnt[0],ypnt[0],zpnt[0])
         qclient.update_plot()
 
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
@@ -260,7 +260,7 @@ class easy_scan():
                                 qclient.compare(data.get_data())
                                 qclient.close()
                                 qclient = qtplot_client(mute=(zpt_num!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,3+len(self._vallabels),xpnt2[0],ypnt[0],zpnt[0])#1d data
+                                qclient.set_file(dfpath_bwd,len(self._vallabels)+len(xchan)+len(ychan)+len(zchan),xpnt2[0],ypnt[0],zpnt[0])#1d data
                                 qclient.update_plot()
                             self._scan1d(xchan,xpnt2,y_iy,z_iz,d_item,is_fwd_now,is1d,qclient,retakejump)
                             is_fwd_now = not is_fwd_now
@@ -316,11 +316,11 @@ class easy_scan():
             #Get data_point
             data_point = [xpnt[0,ix],y_iy[0],z_iz[0]]+g.take_data()#takes tens of ms
             if xchan_num > 1:
-                data_point += xpnt[1:,ix]
+                data_point += list(xpnt[1:,ix])# operator '+' means join for list
             if len(y_iy)>1:
-                data_point += y_iy[1:]
+                data_point += list(y_iy[1:])
             if len(z_iz)>1:
-                data_point += z_iz[1:]
+                data_point += list(z_iz[1:])
             
             #Print to console, update qtplot
             self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now,try_times)
