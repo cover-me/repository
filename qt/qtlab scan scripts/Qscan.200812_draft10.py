@@ -92,7 +92,7 @@ class easy_scan():
         self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)#data number generator
         self._vallabels = g.get_vallabels()#value labels, [reading1, reading2, reading3, ..]
 
-    def _print_progress(self,x,values,is_fwd_now):
+    def _print_progress(self,x,values,is_fwd_now,try_times):
         '''print the progress bar as well as readings to the console. The bar looks like (__?______?__)'''
         pbar_width = 5
         a = int(x*(pbar_width+1))
@@ -101,7 +101,10 @@ class easy_scan():
         progress_bar =  '('+'_'*a+ch+'_'*b+ch+'_'*a+') ' if b>0 else '(%s) '%('_'*(pbar_width*2+2))
         progress_bar += ' '.join(['%+.2e']*len(values))%tuple(values)
         progress_bar = '\r' + STR_TIMEINFO + progress_bar
-        print progress_bar[:TERM_WIDTH],
+        if try_times > 0:
+            print2(progress_bar[:TERM_WIDTH],'red')
+        else:
+            print progress_bar[:TERM_WIDTH],
  
     def _sendToWord(self,msg,addTimestamp=True):
         towordPath = r'..\toWord.2018.06.17\toWord.2018.06.17.exe'
@@ -211,9 +214,9 @@ class easy_scan():
         print 'Emergency stop: Press ctrl+c, then manually stop channels that are still changing (magnet), update channel values with xxx.get_xxx() if they are not right. ctrl+c stops the script immediately, there may be unread messages in instrument buffers.'
         print 'Exit script: ctrl+e. Program waits until setting values (field, dac... ) reached, then closes resources and exits; Better than ctrl+c if not in emergencies.'
         print 'Go to next scan: ctrl+n;'
-        print 'Pause: Select text by \'shift\' and left mouse keys. It will block the script.'
+        print 'Pause: Select text by \'shift\' and left mouse keys. It will block the script (but not the magnet).'
         print 'Help: help(e.scan)'
-        print 'First two numbers below are elapsed time of each datapoint, and remaining time (in min)'
+        print 'First two numbers below are elapsed time of each datapoint (s), and remaining time (min)'
         
         ############# scan #############
         try:
@@ -320,7 +323,7 @@ class easy_scan():
                 data_point += z_iz[1:]
             
             #Print to console, update qtplot
-            self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now)
+            self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now,try_times)
             if is_fwd_now or is1d:
                 qclient.add_data(data_point)
                 qclient.update_plot()
