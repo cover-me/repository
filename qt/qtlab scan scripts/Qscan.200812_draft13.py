@@ -300,64 +300,71 @@ class easy_scan():
             sys.exit()
 
     def _scan1d(self,xchan,xpnt,y_iy,z_iz,d_item,is_fwd_now,is1d,qclient,retakejump):#y_val0=ypnt[0][iy],z_val0=zpnt[0][iz]
-        data_line = []#Data "line" returned by 1d scan
-        ix = 0#Index of x setpoints
-        try_times = 0 #Trying times of retaking the 1d scan due to charge jumps
-        xchan_num = len(xpnt)
+        try_times = 0#Trying times of retaking the 1d scan due to charge jumps
         xpnt_num = len(xpnt[0])
         global RETAKE_TIMES, RETAKE_MAX_REACHED
-        while ix < xpnt_num:
-            #Set x dimension channels
-            for i in np.arange(xchan_num):
-                g.set_val(xchan[i],xpnt[i,ix])
-            #Delay(2) before each readpoint
-            qt.msleep(delay2)
+        hasjump = True
+        while hasjump:
+            data_line = []#Data "line" (2d array) returned by 1d scan
+            hasjump = False
+            for ix in range(xpnt_num):
+                # Set x dimension channels
+                x_ix = xpnt[:,ix]
+                for i,j in zip(xchan,x_ix):
+                    g.set_val(i,j)
+                # Delay(2) before each readpoint
+                qt.msleep(delay2)
 
-            #Get data_point
-            data_point = [xpnt[0,ix],y_iy[0],z_iz[0]]+g.take_data()#takes tens of ms
-            if xchan_num > 1:
-                data_point += list(xpnt[1:,ix])# operator '+' means join for list
-            if len(y_iy)>1:
-                data_point += list(y_iy[1:])
-            if len(z_iz)>1:
-                data_point += list(z_iz[1:])
-            
-            #Print to console, update qtplot
-            self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now,try_times)
-            if is_fwd_now or is1d:
-                qclient.add_data(data_point)
-                qclient.update_plot()
-            
-            #If want to retake data_line when there is a jump, data will be saved to the file after the whole line is taken
-            #otherwise data is saved point by point
-            if retakejump and try_times < retakejump['max_try_times']:
-                data_line.append(data_point)
-                r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
-                isjump = ix > 0 and abs(data_line[ix][r_ind]-data_line[ix-1][r_ind]) > r_x
-                if (not RETAKE_MAX_REACHED) and len(d_item.get_data())>= xpnt_num:
-                    isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xpnt_num+ix][r_ind]) > r_y
-                if isjump:
+                # Get data_point
+                data_point = [xpnt[0,ix],y_iy[0],z_iz[0]]+g.take_data()#Takes tens of ms
+                if len(x_ix) > 1:
+                    data_point += list(x_ix[1:])#Operator '+' means join for list
+                if len(y_iy)>1:
+                    data_point += list(y_iy[1:])
+                if len(z_iz)>1:
+                    data_point += list(z_iz[1:])
+                
+                # Print to console. Update qtplot
+                self._print_progress(1.*ix/xpnt_num,data_point,is_fwd_now,try_times)
+                if is_fwd_now or is1d:
+                    qclient.add_data(data_point)
+                    qclient.update_plot()
+                
+                #Detect jump
+                #If want to retake data_line when jumping, data is saved after the whole line is taken
+                #otherwise data is saved point by point
+                if retakejump:
+                    data_line.append(data_point)
+                    if not hasjump:
+                        r_ind,r_x,r_y = retakejump['index'],retakejump['threshold_x'],retakejump['threshold_y']
+                        isjump = ix > 0 and abs(data_line[ix][r_ind]-data_line[ix-1][r_ind]) > r_x
+                        if (not RETAKE_MAX_REACHED) and len(d_item.get_data())>= xpnt_num:#RETAKE_MAX_REACHED is true if last line has jump
+                            isjump = isjump or abs(data_line[ix][r_ind]-d_item.get_data()[-xpnt_num+ix][r_ind]) > r_y
+                        hasjump = isjump
+                else:
+                    d_item.add_data_point(*data_point)
+                    
+                # Detect key pressing
+                last_key = ''
+                while msvcrt.kbhit():
+                   last_key = msvcrt.getch()
+                if last_key == '\x05':#ctrl+e(xit)
+                    raise KeyboardInterrupt
+                elif last_key == '\x0e':#ctrl+n(ext)
+                    raise UserWarning('next')
+
+            if retakejump and hasjump:
+                if try_times < retakejump['max_try_times']:
                     RETAKE_TIMES += 1
-                    qclient.counter -= ix+1#Reset qclient counter
-                    ix = -1
-                    data_line = []
+                    qclient.counter -= xpnt_num#Reset qclient counter
                     try_times += 1
-            else:
-                d_item.add_data_point(*data_point)
-            ix += 1
+                else:
+                    RETAKE_MAX_REACHED = hasjump
+                    hasjump = False
 
-            #Detect key pressing
-            last_key = ''
-            while msvcrt.kbhit():
-               last_key = msvcrt.getch()
-            if last_key == '\x05':#ctrl+e(xit)
-                raise KeyboardInterrupt
-            elif last_key == '\x0e':#ctrl+n(ext)
-                raise UserWarning('next')
         if retakejump:
             for i in data_line:
                 d_item.add_data_point(*i)
-            RETAKE_MAX_REACHED = try_times >= retakejump['max_try_times']
         d_item.new_block()
 
     def get_scan_str(self,
