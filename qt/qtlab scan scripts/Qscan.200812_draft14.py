@@ -215,7 +215,7 @@ class easy_scan():
         print 'Exit script: ctrl+e. Program waits until setting values (field, dac... ) reached, then closes resources and exits; Better than ctrl+c if not in emergencies.'
         print 'Go to next scan: ctrl+n;'
         print 'Pause: Select text by \'shift\' and left mouse keys. It will block the script (but not the magnet).'
-        print 'Help: help(e.scan)'
+        print 'Help: help(e.scan), help(e.set)'
         print 'First two numbers below are elapsed time of each datapoint (s), and remaining time (min)'
         
         ############# scan #############
@@ -444,6 +444,10 @@ class easy_scan():
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
 
     def set(self,chan,val):
+        '''
+        Set the value of a channel ('daci','magnet'...) and log to Word.
+        Special channels that are not used in scan(): 'ivvi', 'ivvi_rate', 'daci_rate'
+        '''
         # print2('','set',True)#set font color
         scan_str = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
