@@ -1,12 +1,13 @@
+# 2021-02-01: Add feature: set heater currents
 # 20190721
 # 02/02/2018 Po
 # (L)eidon (P)rogram (R)eader for qtlab
 # how to use:
 #   1. make sure the qtlab PC and the Leidon PC are in the same local LAN (both connect to WIRELESS-PITTNET, for example)
 #   2. Run L_messanger.exe (on either PC). This exe talks between qtlab and the Leidon program.
-#   3. Put this file in folder instrument_plugins. In file 80_create_instruments.py, add:
+#   3. Put this file in folder instrument_plugins. In file 80_create_instruments.py, add or in qtlab cmd, run:
 #        print 'Create (L)eidon (P)rogram (R)eader'
-#        LPR = qt.instruments.create('LPR','LPR',address='TCPIP0::10.215.142.232::6340::SOCKET'), the ip address may vary.
+#        fridge = qt.instruments.create('LPR','LPR',address='TCPIP0::10.215.142.232::6340::SOCKET'), the ip address may vary.
 
 
 from instrument import Instrument
@@ -15,7 +16,7 @@ import visa
 import types
 import logging
 
-class LPR(Instrument):
+class LPR_2020_02_01(Instrument):
     '''
     This is the python driver for the Oxford Instruments IPS 120 Magnet Power Supply
 
@@ -52,21 +53,23 @@ class LPR(Instrument):
 
         #Add parameters
         self.add_parameter('3K', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='K')
         self.add_parameter('still', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='K')
         self.add_parameter('cold', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='K')
         self.add_parameter('MC', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='K')
         self.add_parameter('R_3K', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='kohm')
         self.add_parameter('R_still', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='kohm')
         self.add_parameter('R_cold', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='kohm')
         self.add_parameter('R_MC', type=types.FloatType,
-            flags=Instrument.FLAG_GET)
+            flags=Instrument.FLAG_GET,units='kohm')
+        self.add_parameter('I_list', type=types.ListType,
+            flags=Instrument.FLAG_SET,units='uA or mK')
         # Add functions
         self.add_function('get_all')
         self.get_all()
@@ -105,7 +108,7 @@ class LPR(Instrument):
         '''
         logging.info(__name__ + ' : Send the following command to the device: %s' % message)
         self._visainstrument.write(message)
-        sleep(20e-3) # wait for the device to be able to respond
+        sleep(5e-3) # wait for the device to be able to respond
         result = self._visainstrument.read()
         return result
 
@@ -140,3 +143,10 @@ class LPR(Instrument):
     def do_get_R_MC(self):
         result = self._execute('13')
         return float(result)
+
+    def do_set_I_list(self,i_list):
+        if len(i_list) == 4 and all([i<=25000 for i in i_list]):
+            i_list = ['%g'%i for i in i_list]
+            result = self._execute('SET '+','.join(i_list))
+        else:
+            print 'A wrong list. Nothing has been done.'
