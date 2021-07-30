@@ -539,7 +539,7 @@ class get_set():
                 val.append(ch.get_MC())
             else:
                 print2('\nCan\'t read channel: %s\n!!!'%ch,'red')
-        val = val + self.get_prcss(val)#add processed data        
+        val = val + self.get_prcss(val)#add processed data    
         #qt.msleep(0.01)
         return val
     def get_vallabels(self):
@@ -550,7 +550,7 @@ class get_set():
         '''get values from an output channel, keep update with set_val!'''
         if self.is_dac_name(chan):
             return ivvi.get(chan)# 4.3 ms
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             return qt.instruments.get(chan).get_field()#same speed as magnet.get_field(), ~ 600 ms
         elif chan == 'Lakeshore':
             return qt.instruments.get(chan).get_kelvinA()
@@ -561,7 +561,7 @@ class get_set():
         if self.is_dac_name(chan):
             #print 'setting %s to %f'%(chan,val)
             return ivvi.set(chan,val)
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             #print 'setting B to %f'%(val)
             return qt.instruments.get(chan).set_field(val)
         # elif chan == 'magnet_r_theta':better to write a driver
@@ -578,7 +578,7 @@ class get_set():
         if self.is_dac_name(chan):
             _ = ivvi.get_parameters()[chan]
             return '%s/%s'%(_['maxstep'],_['stepdelay'])
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             _ = qt.instruments.get(chan).get_rampRate()
             return '%s'%_
         return ''   
