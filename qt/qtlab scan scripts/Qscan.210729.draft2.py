@@ -7,6 +7,7 @@
 # 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
 # 19.09.06 shortcuts ctrl+e and ctrl+n
 # 19.09.16 shifted scan, 3D scan, meander scan
+# 21.07.30 When taking data, write to all insturmens and then read, instead of write-read one by one.
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -76,6 +77,7 @@ class qtplot_client():
             self.mute = True
         if self.npy_path != '':
             rmtree(os.path.split(self.npy_path)[0],ignore_errors=True)
+
 class easy_scan():
     def __init__(self):
         self._filename=filename
@@ -377,7 +379,7 @@ class easy_scan():
         if chan == 'ivvi':
             for i in ivvi.get_parameter_names():
                 g.set_val(i,val)
-        elif chan.endswith('_rate'):
+        elif chan.endswith('_rate'):#ivvi_rate or dac*_rate
             chan0 = chan[:-5]
             delay = 30
             scanStr += ', %s ms'%delay
@@ -404,12 +406,14 @@ class easy_scan():
 class get_set():
     '''get readings, set outputs'''
     def __init__(self):
-        # print2('','yellow',True)#set font color
         self.t0  = time()
-        self._rdlabels = []#labels used for taking data
+        self._rdlabels = []
         self._rdchans = []
+        self._rdcommands = []
         self._prcss_labels = ['time']
-        self._prcss_list = []
+        self._prcss_funs = []
+        rd_cmd = {'keithley':'DATA?','lockin_XY':'SNAP?1,2','lockin_RT':'SNAP?3,4'}
+        # a channel name, b description
         for a,b in instruments_to_read:
             if a.startswith('lockin'):
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_R"))
@@ -417,16 +421,29 @@ class get_set():
                 chn = qt.instruments.get(a)
                 self._rdchans.append(chn)
                 self._rdchans.append(chn)
+                self._rdcommands.append(rd_cmd['lockin_RT'])
+                self._rdcommands.append(None)
+
             elif a.startswith('[xy]lockin'):
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_X"))
                 self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_Y"))
                 chn = qt.instruments.get(a[4:])
                 self._rdchans.append(chn)
                 self._rdchans.append(chn)
+                self._rdcommands.append(rd_cmd['lockin_XY'])
+                self._rdcommands.append(None)
+
             else:
                 self._rdlabels.append('%s (%s)'%(a,b))
                 chn = qt.instruments.get(a)                
                 self._rdchans.append(chn)
+                if a.startswith('keithley'):
+                    self._rdcommands.append(rd_cmd['keithley'])
+                else:
+                    print('Error! Channel type not recognized: %s.'%a, 'red')
+                    sys.exit()
+
+            # Clear GPIB buffer, get_all
             insObj = chn._ins
             if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
                 print 'visa_clear:\t%s'%a
@@ -435,15 +452,15 @@ class get_set():
                 print 'get_all:\t', a
                 chn.get_all()
         if not all(self._rdchans):
-            print2('Some instruments you want to read has not been loaded by qtlab. No scan has been done.','red')
+            print2('Some instruments you want to read has not been loaded by qtlab.','red')
             sys.exit()
-        self._rdnum = len(self._rdlabels)
-        # print2('','')#set font color
+
+        self._rdnum = len(self._rdlabels)#only used in take_data_old
         print
-    def take_data(self):
-        '''take data from input channels and do some calculation'''
+
+    def take_data_old(self):
+        '''Take data from input channels and do some calculation'''
         val = []
-        #print 'taking data'
         for i in range(self._rdnum):
             lb = self._rdlabels[i]
             ch = self._rdchans[i]
@@ -463,37 +480,45 @@ class get_set():
                 val.append(ch.get_MC())
             else:
                 print2('\nCan\'t read channel: %s\n!!!'%ch,'red')
-        val = val + self.get_prcss(val)#add processed data        
-        #qt.msleep(0.01)
+        val = val + self.get_prcss(val)#add processed data
         return val
+        
+    def take_data(self):        
+        '''take data from input channels and do some calculation'''
+        for i,j in zip(self._rdchans,self._rdcommands):
+            if j is not None:
+                i._ins._visainstrument.write(j)
+        ans_str = ''
+        for i,j in zip(self._rdchans,self._rdcommands):
+            if j is not None:
+                ans_str += i._ins._visainstrument.read() + ','
+        val = [float(i) for i in ans_str[:-1].split(',')]
+        val = val + self.get_prcss(val)#add processed data        
+        return val
+        
+
     def get_vallabels(self):
         return self._rdlabels + self._prcss_labels
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
-    def get_val(self,chan):#'chan': channel
+    def get_val(self,chan):#'chan': channel name
         '''get values from an output channel, keep update with set_val!'''
         if self.is_dac_name(chan):
             return ivvi.get(chan)# 4.3 ms
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             return qt.instruments.get(chan).get_field()#same speed as magnet.get_field(), ~ 600 ms
         elif chan == 'Lakeshore':
             return qt.instruments.get(chan).get_kelvinA()
         elif chan == 'time':
             return time()-self.t0
-    def set_val(self,chan,val):
+    def set_val(self,chan,val):#'chan': channel name
         '''set values of an output channel, keep update with get_val and get_rate!'''
         if self.is_dac_name(chan):
             #print 'setting %s to %f'%(chan,val)
             return ivvi.set(chan,val)
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             #print 'setting B to %f'%(val)
             return qt.instruments.get(chan).set_field(val)
-        # elif chan == 'magnet_r_theta':better to write a driver
-            # t_rad = val2/180.*math.pi
-            # x = val*math.cos(t_rad)
-            # z = val*math.sin(t_rad)
-            # qt.instruments.get('magnetX').set_field(x)
-            # return qt.instruments.get('magnet').set_field(z)
         elif chan == 'Lakeshore':
             return qt.instruments.get(chan).set_setpoint1(val)
         return False
@@ -502,13 +527,14 @@ class get_set():
         if self.is_dac_name(chan):
             _ = ivvi.get_parameters()[chan]
             return '%s/%s'%(_['maxstep'],_['stepdelay'])
-        elif chan == 'magnet' or chan == 'magnetX':
+        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             _ = qt.instruments.get(chan).get_rampRate()
             return '%s'%_
         return ''   
     ############## process data #####################
     def add_lockin_conductance(self,arg_dict):
         '''
+        Not very useful
         lockin_osc: lockin osc out * 0.01
         Vrange: ivvi output voltage range in V/V, usually 0.01
         Igain: 1.e6
@@ -518,18 +544,25 @@ class get_set():
             print2('Failed to add lockin_conductance!\n','red')
             return
         self._prcss_labels.append(arg_dict['label'])
-        self._prcss_list.append({'function':self.get_lockin_conductance,'arg':arg_dict})
+        self._prcss_funs.append({'function':self.get_lockin_conductance,'arg':arg_dict})
     def get_lockin_conductance(self,arg_dict,val):
+        '''
+        Not very useful
+        '''
         ac_excitation = arg_dict['lockin_osc'] * arg_dict['Vrange']
         ac_current = val[arg_dict['index']]/arg_dict['Igain']
         sigma = ac_current/ac_excitation
         r0 = 12906
         return r0*sigma/(1.-arg_dict['Rin']*sigma)
+    
     def get_prcss(self,val):
         p_val = [time()-self.t0]
-        for i in self._prcss_list:
+        for i in self._prcss_funs:
             p_val.append(i['function'](i['arg'],val))
         return p_val
+
+
+
 
 def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
