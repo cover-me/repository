@@ -16,7 +16,7 @@ import visa
 import types
 import logging
 
-class LPR_2020_02_01(Instrument):
+class LPR_2021_08_02(Instrument):
     '''
     This is the python driver for the Oxford Instruments IPS 120 Magnet Power Supply
 
@@ -72,6 +72,7 @@ class LPR_2020_02_01(Instrument):
             flags=Instrument.FLAG_SET,units='uA or mK')
         # Add functions
         self.add_function('get_all')
+        sleep(5)
         self.get_all()
 
     def get_all(self):
