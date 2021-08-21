@@ -39,7 +39,7 @@ class instrument_usb(visa.Instrument):
             warnings.warn("given resource was not an INSTR but %s"
                           % self.resource_class, stacklevel=2)
 
-class SR7270_usb_210816(Instrument):
+class SR7270_usb_210821(Instrument):
     '''
     This is the python driver for the signal recovery 7270 lockin (usb port).
 
@@ -64,6 +64,7 @@ class SR7270_usb_210816(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
         self._address = address
         self._visainstrument = instrument_usb(self._address,term_chars='')
+        self.add_parameter('id', flags=Instrument.FLAG_GET, units='', type=types.StringType)
         self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
@@ -94,6 +95,7 @@ class SR7270_usb_210816(Instrument):
             None
         '''
         logging.info(__name__ + ' : get all from instrument')
+        self.get_id()
         self.get_X()
         self.get_Y()
         self.get_R()
@@ -109,6 +111,9 @@ class SR7270_usb_210816(Instrument):
         readstr = self._visainstrument.ask('%s.\0' %output)
         readvalue = float(readstr[:-4])
         return readvalue  
+  
+    def _do_get_id(self):
+        return "%s, %s, %s"%(self._visainstrument.ask('ID\0'),self._visainstrument.ask('VER\0'),self._visainstrument.ask('DATE\0'))
         
     def _do_get_X(self):
         '''
