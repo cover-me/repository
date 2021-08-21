@@ -39,7 +39,7 @@ class instrument_usb(visa.Instrument):
             warnings.warn("given resource was not an INSTR but %s"
                           % self.resource_class, stacklevel=2)
 
-class SR7270_usb_191002(Instrument):
+class SR7270_usb_210816(Instrument):
     '''
     This is the python driver for the signal recovery 7270 lockin (usb port).
 
@@ -76,6 +76,8 @@ class SR7270_usb_191002(Instrument):
             units='V', format='%.3f')
         self.add_parameter('sensitivity', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, units='')
+        self.add_parameter('ac_gain', type=types.StringType,
+            flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, units='')
         self.add_function('get_all')
         self.get_all()
 
@@ -100,6 +102,7 @@ class SR7270_usb_191002(Instrument):
         self.get_tau()
         self.get_amplitude()
         self.get_sensitivity()
+        self.get_ac_gain()
         
     def read_output(self,output):
         logging.info(__name__ + ' : Reading parameter from instrument: %s ' %output)
@@ -190,6 +193,46 @@ class SR7270_usb_191002(Instrument):
         }
         ans = int(self._visainstrument.ask('SEN\0')[:-4])
         sen_label = sensitivities.get(ans-1)
+        return '%s (%s)'%(ans,sen_label) 
+        
+        
+        
+    def _do_set_ac_gain(self,ac_amp_str):
+        '''
+        Set the sensitivuty of the LockIn
+        1-27, 2nV-5nV-10nV-....1V
+        '''
+        ac_amp = int(ac_amp_str)
+        if ac_amp in range(0,16):
+            self._visainstrument.ask('ACGAIN %d\0' % (ac_amp))
+        else:
+            print 'Ac gain out of range'
+
+    def _do_get_ac_gain(self):
+        '''
+        Set the sensitivuty of the LockIn
+        1-27, 2nV-5nV-10nV-....1V
+        '''
+        sensitivities = {
+        0 : "0dB,2V",
+        1 : "6dB,1V",
+        2 : "12dB,500mV",
+        3 : "18dB,250mV",
+        4 : "24dB,125mV",
+        5 : "30dB,62mV",
+        6 : "36dB,31mV",
+        7 : "42dB,16mV",
+        8 : "48dB,8mV",
+        9 : "54dB,4mV",
+        10 : "60dB,2mV",
+        11 : "66dB,1mV",
+        12 : "72dB,500uV",
+        13 : "78dB,250uV",
+        14 : "84dB",
+        15 : "90dB",
+        }
+        ans = int(self._visainstrument.ask('ACGAIN\0')[:-4])
+        sen_label = sensitivities.get(ans)
         return '%s (%s)'%(ans,sen_label) 
         
         
