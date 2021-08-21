@@ -113,7 +113,7 @@ class SR7270_usb_210821(Instrument):
         return readvalue  
   
     def _do_get_id(self):
-        return "%s, %s, %s"%(self._visainstrument.ask('ID\0'),self._visainstrument.ask('VER\0'),self._visainstrument.ask('DATE\0'))
+        return "%s, %s, %s"%(self._visainstrument.ask('ID\0')[:-4],self._visainstrument.ask('VER\0')[:-4],self._visainstrument.ask('DATE\0')[:-4])
         
     def _do_get_X(self):
         '''
