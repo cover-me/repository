@@ -394,7 +394,9 @@ class easy_scan():
             this_file_path=code_str
             exec(code_str)
 class get_set():
-    '''get readings, set outputs'''
+    '''
+    get readings, set outputs
+    '''
     def __init__(self):
         self.t0  = time()
         self._query_list = []
@@ -411,40 +413,57 @@ class get_set():
                 print2('Some instruments you want to read has not been loaded by qtlab.','red')
                 sys.exit()
              
-            # If a reading is a list (e.g., lockin X and Y), we indicate it by '&'.
-            if '&' in para_name:
-                for i in para_name.split('&'):
-                    self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,i,label)])
+            # If the reading is a list (e.g., lockin X and Y).
+            if para_name in ['XY', 'RP']:
+                self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,para_name[0],label)])
+                for i in list(para_name[1:]):
+                    self._query_list.append([None,None,'%s_%s (%s)'%(instr_name,i,label)])
             else:
                 self._query_list.append([instr,para_name,'%s (%s)'%(instr_name,label)])
 
-            # Clear GPIB buffer, get_all
-            insObj = chn._ins
-            if hasattr(insObj,'_address') and insObj._address.startswith('GPIB') and hasattr(insObj,'_visainstrument'):
-                print 'visa_clear:\t%s'%a
-                insObj._visainstrument.clear()#clear the buffer
-            if hasattr(chn,'get_all'):
-                print 'get_all:\t', a
-                chn.get_all()
+            # Clear GPIB, usb buffer, get_all
+            insObj = instr._ins
+            if hasattr(insObj,'_address'):
+                if insObj._address.startswith('GPIB'):
+                    if hasattr(insObj,'_visainstrument'):
+                        print 'visa_clear:\t%s'%instr_name
+                        insObj._visainstrument.clear()#clear the buffer
+                # elif insObj._address.startswith('USB'):
+                    # if hasattr(insObj,'_visainstrument'):
+                        # print 'visa_clear:\t%s'%instr_name
+                        # insObj._visainstrument.clear()#clear the buffer
+            if hasattr(instr,'get_all'):
+                print 'get_all:\t', instr_name
+                instr.get_all()
       
         print
+        
+    def take_data_separately(self):
+        val = []
+        for instr, para_name, label in self._query_list:
+            if instr is not None:
+                ans = instr.get(para_name)
+                if type(ans) == list:
+                    val += ans
+                else:
+                    val.append(ans)
+        val += self.get_prcss(val)#add processed data
+        return val
     
     def take_data(self):
+        # flag 0 (default): write command and read respond, 1: write only, 2: read only
         val = []
-        
-        # send commands
         for instr, para_name, label in self._query_list:
-            # flag 0 (default): write command and read respond, 1: write only, 2: read only
-            instr.get(para_name, flag=1)
-        
-        # read responds
+            if instr is not None:
+                instr.get(para_name, flag=1)
+
         for instr, para_name, label in self._query_list:
-            # flag 0 (default): write command and read respond, 1: write only, 2: read only
-            ans = instr.get(para_name, flag=2)
-            if type(ans) == list:
-                val += ans
-            else:
-                val.append(ans)
+            if instr is not None:
+                ans = instr.get(para_name, flag=2)
+                if type(ans) == list:
+                    val += ans
+                else:
+                    val.append(ans)
         val += self.get_prcss(val)#add processed data
         return val       
 
