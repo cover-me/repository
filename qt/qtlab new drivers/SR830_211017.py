@@ -25,15 +25,9 @@ import visa
 import types
 import logging
 
-class SR830_2018(Instrument):
+class SR830_211017(Instrument):
     '''
-    This is the python driver for the Lock-In SR830 from Stanford Research Systems
-    signal generator
-
-    Usage:
-    Initialize with
-    <name> = instruments.create('name', 'SR830', address='<GPIB address>',
-        reset=<bool>)
+    This is the python driver for the Lock-In SR830
     '''
 
     def __init__(self, name, address, reset=False):
@@ -53,6 +47,7 @@ class SR830_2018(Instrument):
 
         self._address = address
         self._visainstrument = visa.instrument(self._address)
+        self._visainstrument.clear()
 
         self.add_parameter('mode',
            flags=Instrument.FLAG_SET,
@@ -71,8 +66,10 @@ class SR830_2018(Instrument):
             minval=-360, maxval=729, units='deg')
         self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
+        self.add_parameter('XY', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('P', flags=Instrument.FLAG_GET, units='deg', type=types.FloatType)
+        self.add_parameter('RP', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
         self.add_parameter('status', flags=Instrument.FLAG_GET, units='', type=types.StringType)
         self.add_parameter('tau', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, units='')
@@ -127,10 +124,12 @@ class SR830_2018(Instrument):
             None
         '''
         logging.info(__name__ + ' : reading all settings from instrument')
-        self.get_P()
         self.get_R()
+        self.get_P()
+        self.get_RP()
         self.get_X()
         self.get_Y()
+        self.get_XY()
         self.get_amplitude()
         self.get_frequency()
         self.get_phase()
@@ -207,6 +206,18 @@ class SR830_2018(Instrument):
         Read out Y of the Lock In
         '''
         return self.read_output(2)
+
+    def _do_get_XY(self,flag=0):
+        '''
+        Read XY
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag != 2:
+            self._visainstrument.write('SNAP?1,2')
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return [float(i) for i in ans.split(',')]
+        return None
     
     def _do_get_R(self):
         '''
@@ -219,6 +230,18 @@ class SR830_2018(Instrument):
         Read out P of the Lock In
         '''
         return self.read_output(4)
+        
+    def _do_get_RP(self,flag=0):
+        '''
+        Read RP
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag != 2:
+            self._visainstrument.write('SNAP?3,4')
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return [float(i) for i in ans.split(',')]
+        return None
     
     def _do_get_status(self):
         '''
