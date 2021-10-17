@@ -10,6 +10,7 @@
 # 21.07.30 When taking data, write to all insturmens and then read, instead of write-read one by one.
 # 21.08.23 change keithley reading from lastval to nextval
 # 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
+# 21.10.17 When setting x channels, wait once instead of x times 
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -221,25 +222,20 @@ class easy_scan():
         self.user_interrrupt = False
         ############# scan #############
         try:
-            # set z channel(s)
+            # set z channels and initialize y channels
             for iz in np.arange(zptlen):
-                for i in np.arange(zlen):
-                    g.set_val(zchan[i],zpnt[i,iz])
-                    
+                g.set_vals(zchan,zpnt[:,iz])
                 if delay0>0:
-                    for i in np.arange(ylen):
-                        g.set_val(ychan[i],ypnt[i,0])
+                    g.set_vals(ychan,ypnt[:,0])
                     qt.msleep(delay0)
-                # set y channel(s) and initialize x channel(s)
+                # set y channels and initialize x channels
                 for iy in np.arange(yptlen):
                     t0 = time()
-                    for i in np.arange(ylen):
-                        g.set_val(ychan[i],ypnt[i,iy])
-                        
+                    g.set_vals(ychan,ypnt[:,iy])
                     if delay1>0:
-                        for i in np.arange(xlen):
-                            g.set_val(xchan[i],xpnt[i,0])
+                        g.set_vals(xchan,xpnt[:,0])
                         qt.msleep(delay1)
+
                     # sweep x channels
                     is_fwd_now = True
                     is1d = (numloops==1)
@@ -291,8 +287,7 @@ class easy_scan():
         while -1 < ix < xptlen:
             #set xchans
             if not issweeping:
-                for i in np.arange(xlen):
-                    g.set_val(xchan[i],xpnt[i][ix])
+                g.set_vals(xchan,xpnt[:,ix])
             #delay before each point
             qt.msleep(delay2)
             #get xchans
@@ -371,19 +366,20 @@ class easy_scan():
         # print2('','set',True)#set font color
         scanStr = "e.set('%s',%s)"%(chan,val)
         if chan == 'ivvi':
-            for i in ivvi.get_parameter_names():
-                g.set_val(i,val)
+            dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
+            g.set_vals(dac_names,[val]*len(dac_names))
         elif chan.endswith('_rate'):#ivvi_rate or dac*_rate
             chan0 = chan[:-5]
             delay = 30
             scanStr += ', %s ms'%delay
             if chan0 == 'ivvi':
-                for i in ivvi.get_parameter_names():
+                dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
+                for i in dac_names:
                     ivvi.set_parameter_rate(i,val,delay)
             elif g.is_dac_name(chan0):
                     ivvi.set_parameter_rate(chan0,val,delay)
         else:
-            g.set_val(chan,val)
+            g.set_vals([chan],[val])
         self._sendToWord(scanStr+'<return>')
         # print2('','')#set font to default
         print
@@ -522,17 +518,66 @@ class get_set():
             return qt.instruments.get(chan).get_kelvinA()
         elif chan == 'time':
             return time()-self.t0
-    def set_val(self,chan,val):#'chan': channel name
-        '''set values of an output channel, keep update with get_val and get_rate!'''
+    
+    def _set_vals(self, set_queue):
+        step = 0
+        delay = 0
+        pv_list = []
+        delta_list = []
+        
+        # calculate step, delay, pv_list, delta_list, sign_list
+        for i in set_queue:
+            instr_name, para_name, sv = i
+            instr = qt.instruments.get(instr_name)
+            para = instr.get_parameters()[para_name]
+            pv = para['value']
+            if pv is None:
+                pv = instr.get(para_name)
+            d = pv - sv
+            pv_list.append(pv)
+            delta_list.append(d)
+            if step==0 or step>para['maxstep']:
+                step = para['maxstep']
+            if delay<para['stepdelay']:
+                delay = para['stepdelay'] 
+        sign_list = [int(i<0)*2-1 for i in delta_list]
+        
+        # ramp channels
+        while 1:
+            for i in range(len(set_queue)):
+                if delta_list[i] != 0:
+                    instr_name, para_name, sv = set_queue[i]
+                    instr = qt.instruments.get(instr_name)
+                    if abs(delta_list[i])> step:
+                        pv_list[i] += sign_list[i] * step
+                        delta_list[i] += sign_list[i] * step
+                    else:
+                        pv_list[i] = sv
+                        delta_list[i] = 0
+                    t0 = time()
+                    instr.set(para_name, pv_list[i])
+            if all(d==0 for d in delta_list):# True if delta_list is empty
+                break
+            else:
+                qt.msleep(delay/1000.)
+
+    def set_val_items(self,chan,val):#'chan': channel name
         if self.is_dac_name(chan):
-            #print 'setting %s to %f'%(chan,val)
-            return ivvi.set(chan,val)
+            return [['ivvi',chan,val],]
         elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
-            #print 'setting B to %f'%(val)
-            return qt.instruments.get(chan).set_field(val)
+            return [[chan,'field',val],]
         elif chan == 'Lakeshore':
-            return qt.instruments.get(chan).set_setpoint1(val)
-        return False
+            return [[chan,'setpoint1',val],]
+        return None
+        
+    def set_vals(self,chan_list,val_list):#'chan': channel name
+        set_queue = []
+        for i,j in zip(chan_list,val_list):
+            items = self.set_val_items(i,j)
+            if items is not None:
+                set_queue.extend(items)
+        self._set_vals(set_queue)
+
     def get_rate(self,chan):
         '''get rates from an output channel, keep update with set_val!'''
         if self.is_dac_name(chan):
