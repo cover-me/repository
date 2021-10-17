@@ -10,7 +10,7 @@
 # 21.07.30 When taking data, write to all insturmens and then read, instead of write-read one by one.
 # 21.08.23 change keithley reading from lastval to nextval
 # 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
-# 21.10.17 When setting x channels, wait once instead of x times 
+# 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -594,7 +594,38 @@ def print2(s,style='',hold=False):
         ips.io.stdout.write('%s%s%s'%(stylelist[style],s,post))
     else:
         ips.io.stdout.write('%s%s%s'%(style,s,post))
-    
+        
+# source information
+SRC_INFO = {
+    '10 mV/V':[1.e-2,'V(e-2mV)'],
+    '10 uA/V':[1.e-5,'I(e-2uA)'],'100 uA/V':[1.e-4,'I(e-1uA)']
+    }
+# measure information
+MSR_INFO = {
+    # '1 MV/A':[1.e6,'e-6A',7100],'100 MV/A':[1.e8,'e-8A',106100],'1 GV/A':[1.e9,'e-9A',1006100],#old module
+    '1 MV/A':[1.e6,'e-6A',4440], '100 MV/A':[1.e8,'e-8A',16000],'1 GV/A':[1.e9,'e-9A',106000],#new module
+    '1 V/V':[1.,'V',None],'10 V/V':[1.e1,'e-1V',None], '100 V/V':[1.e2,'e-2V',None], '1 kV/V':[1.e3,'e-3V',None], '10 kV/V':[1.e4,'e-4V',None]
+    }
+
+def get_SD_info(dev):
+    print 'Source drain info (for double check)'
+    src = dev['source']
+    msr = dev['measure']
+    src_channel = 'dac%d'%src['in'][0]
+    src_amp = SRC_INFO[src['module'][1]][0]
+    src_unit = SRC_INFO[src['module'][1]][1]
+    meas_channel_dc = msr['out'][2]
+    meas_channel_ac = msr['out'][4]
+    meas_amp_dc = MSR_INFO[msr['module'][1]][0]
+    meas_unit_dc = MSR_INFO[msr['module'][1]][1]
+    print src_channel, src_unit
+    print meas_channel_dc, meas_unit_dc
+    if LOCKIN_ON:
+        meas_amp_ac = MSR_INFO[msr['module'][2]][0]
+        meas_unit_ac = MSR_INFO[msr['module'][2]][1]+',exc%su'%(LOCKIN_AMP*1e-2*src_amp*1e6)
+        print meas_channel_ac, meas_unit_ac
+    return src_unit, meas_unit_dc, meas_unit_ac
+
 TERM_WIDTH = get_term_width()-1
 STR_TIMEINFO=''
 LOGO = '''
