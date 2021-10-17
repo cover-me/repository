@@ -397,41 +397,26 @@ class get_set():
     '''get readings, set outputs'''
     def __init__(self):
         self.t0  = time()
-        self._rdlabels = []
-        self._rdchans = []
-        self._rdcommands = []
+        self._query_list = []
         self._prcss_labels = ['time']
         self._prcss_funs = []
-        rd_cmd = {'keithley':':DATA:FRES?','lockin_XY':'SNAP?1,2','lockin_RT':'SNAP?3,4'}
-        # a channel name, b description
-        for a,b in instruments_to_read:
-            if a.startswith('lockin'):
-                self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_R"))
-                self._rdlabels.append(('%s (%s)'%(a,b)).replace('lockin',"lockin_P"))
-                chn = qt.instruments.get(a)
-                self._rdchans.append(chn)
-                self._rdchans.append(chn)
-                self._rdcommands.append(rd_cmd['lockin_RT'])
-                self._rdcommands.append(None)
 
-            elif a.startswith('[xy]lockin'):
-                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_X"))
-                self._rdlabels.append(('%s (%s)'%(a,b)).replace('[xy]lockin',"lockin_Y"))
-                chn = qt.instruments.get(a[4:])
-                self._rdchans.append(chn)
-                self._rdchans.append(chn)
-                self._rdcommands.append(rd_cmd['lockin_XY'])
-                self._rdcommands.append(None)
-
+        # channels_to_read: [('keithley1','readnextval','V'),('lockin1','X&Y','e-3V,exc0.1uA')]
+        # a channel is what qtlab calls a parameter
+        for instr_name, para_name, label in channels_to_read:
+            instr = qt.instruments.get(instr_name)
+            
+            # check if the channel is availabel
+            if instr is None or para_name not in instr.get_parameters():
+                print2('Some instruments you want to read has not been loaded by qtlab.','red')
+                sys.exit()
+             
+            # If a reading is a list (e.g., lockin X and Y), we indicate it by '&'.
+            if '&' in para_name:
+                for i in para_name.split('&'):
+                    self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,i,label)])
             else:
-                self._rdlabels.append('%s (%s)'%(a,b))
-                chn = qt.instruments.get(a)                
-                self._rdchans.append(chn)
-                if a.startswith('keithley'):
-                    self._rdcommands.append(rd_cmd['keithley'])
-                else:
-                    print('Error! Channel type not recognized: %s.'%a, 'red')
-                    sys.exit()
+                self._query_list.append([instr,para_name,'%s (%s)'%(instr_name,label)])
 
             # Clear GPIB buffer, get_all
             insObj = chn._ins
@@ -441,92 +426,47 @@ class get_set():
             if hasattr(chn,'get_all'):
                 print 'get_all:\t', a
                 chn.get_all()
-        if not all(self._rdchans):
-            print2('Some instruments you want to read has not been loaded by qtlab.','red')
-            sys.exit()
-
-        self._rdnum = len(self._rdlabels)#only used in take_data_old
+      
         print
-
-    def take_data_old(self):
-        '''Take data from input channels and do some calculation'''
+    
+    def take_data(self):
         val = []
-        for i in range(self._rdnum):
-            lb = self._rdlabels[i]
-            ch = self._rdchans[i]
-            if lb.startswith('keithley'):
-                val.append(ch.get_readnextval())
-            elif lb.startswith('lockin_R'):
-                val.append(ch.get_R())
-            elif lb.startswith('lockin_P'):
-                val.append(ch.get_P())
-            elif lb.startswith('lockin_X'):
-                val.append(ch.get_X())
-            elif lb.startswith('lockin_Y'):
-                val.append(ch.get_Y())
-            elif lb.startswith('Lakeshore'):
-                val.append(ch.get_kelvinA())
-            elif lb.startswith('fridge'):
-                val.append(ch.get_MC())
+        
+        # send commands
+        for instr, para_name, label in self._query_list:
+            # flag 0 (default): write command and read respond, 1: write only, 2: read only
+            instr.get(para_name, flag=1)
+        
+        # read responds
+        for instr, para_name, label in self._query_list:
+            # flag 0 (default): write command and read respond, 1: write only, 2: read only
+            ans = instr.get(para_name, flag=2)
+            if type(ans) == list:
+                val += ans
             else:
-                print2('\nCan\'t read channel: %s\n!!!'%ch,'red')
-        val = val + self.get_prcss(val)#add processed data
-        return val
-        
-    def take_data(self):        
-        '''take data from input channels and do some calculation'''
-        try:
-            for i,j in zip(self._rdchans,self._rdcommands):
-                if j is not None:
-                    i._ins._visainstrument.write(j)
-            ans_str = ''
-            for i,j in zip(self._rdchans,self._rdcommands):
-                if j is not None:
-                    ans_str += i._ins._visainstrument.read() + ','
-
-            val = [float(i) for i in ans_str[:-1].split(',')]
-            val = val + self.get_prcss(val)#add processed data
-        except:
-            print '\n\n\n'
-            print ans_str
-            print ans_str
-            for i,j in zip(self._rdchans,self._rdcommands):
-                if j is not None:
-                    i._ins._visainstrument.write(j)
-            ans_str = ''
-            for i,j in zip(self._rdchans,self._rdcommands):
-                if j is not None:
-                    ans_str += i._ins._visainstrument.read() + ','
-
-            val = [float(i) for i in ans_str[:-1].split(',')]
-            val = val + self.get_prcss(val)#add processed data
-
-        return val
-        
+                val.append(ans)
+        val += self.get_prcss(val)#add processed data
+        return val       
 
     def get_vallabels(self):
-        return self._rdlabels + self._prcss_labels
+        return [i[2] for i in self._query_list] + self._prcss_labels
+
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
-    def get_val(self,chan):#'chan': channel name
-        '''get values from an output channel, keep update with set_val!'''
-        if self.is_dac_name(chan):
-            return ivvi.get(chan)# 4.3 ms
-        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
-            return qt.instruments.get(chan).get_field()#same speed as magnet.get_field(), ~ 600 ms
-        elif chan == 'Lakeshore':
-            return qt.instruments.get(chan).get_kelvinA()
-        elif chan == 'time':
-            return time()-self.t0
     
-    def _set_vals(self, set_queue):
+    def _set_vals(self, setpoint_list):
+        '''
+        Set a list of channels
+        input:
+            setpoint_list: a list of setpoints. A setpoint is like [instr_name, para_name, sv]
+        '''
         step = 0
         delay = 0
         pv_list = []
         delta_list = []
         
         # calculate step, delay, pv_list, delta_list, sign_list
-        for i in set_queue:
+        for i in setpoint_list:
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
             para = instr.get_parameters()[para_name]
@@ -539,14 +479,15 @@ class get_set():
             if step==0 or step>para['maxstep']:
                 step = para['maxstep']
             if delay<para['stepdelay']:
-                delay = para['stepdelay'] 
+                delay = para['stepdelay']
+
         sign_list = [int(i<0)*2-1 for i in delta_list]
         
         # ramp channels
         while 1:
-            for i in range(len(set_queue)):
+            for i in range(len(setpoint_list)):
                 if delta_list[i] != 0:
-                    instr_name, para_name, sv = set_queue[i]
+                    instr_name, para_name, sv = setpoint_list[i]
                     instr = qt.instruments.get(instr_name)
                     if abs(delta_list[i])> step:
                         pv_list[i] += sign_list[i] * step
@@ -554,14 +495,13 @@ class get_set():
                     else:
                         pv_list[i] = sv
                         delta_list[i] = 0
-                    t0 = time()
                     instr.set(para_name, pv_list[i])
             if all(d==0 for d in delta_list):# True if delta_list is empty
                 break
             else:
                 qt.msleep(delay/1000.)
 
-    def set_val_items(self,chan,val):#'chan': channel name
+    def get_setpoint(self,chan,val):
         if self.is_dac_name(chan):
             return [['ivvi',chan,val],]
         elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
@@ -570,13 +510,13 @@ class get_set():
             return [[chan,'setpoint1',val],]
         return None
         
-    def set_vals(self,chan_list,val_list):#'chan': channel name
-        set_queue = []
+    def set_vals(self,chan_list,val_list):
+        setpoint_list = []
         for i,j in zip(chan_list,val_list):
-            items = self.set_val_items(i,j)
+            items = self.get_setpoint(i,j)
             if items is not None:
-                set_queue.extend(items)
-        self._set_vals(set_queue)
+                setpoint_list.extend(items)
+        self._set_vals(setpoint_list)
 
     def get_rate(self,chan):
         '''get rates from an output channel, keep update with set_val!'''
@@ -586,7 +526,8 @@ class get_set():
         elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
             _ = qt.instruments.get(chan).get_rampRate()
             return '%s'%_
-        return ''   
+        return ''
+        
     ############## process data #####################
     def add_lockin_conductance(self,arg_dict):
         '''
