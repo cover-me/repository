@@ -39,7 +39,7 @@ class instrument_usb(visa.Instrument):
             warnings.warn("given resource was not an INSTR but %s"
                           % self.resource_class, stacklevel=2)
 
-class SR7270_usb_210821(Instrument):
+class SR7270_usb_211017(Instrument):
     '''
     This is the python driver for the signal recovery 7270 lockin (usb port).
 
@@ -67,8 +67,10 @@ class SR7270_usb_210821(Instrument):
         self.add_parameter('id', flags=Instrument.FLAG_GET, units='', type=types.StringType)
         self.add_parameter('X', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('Y', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
+        self.add_parameter('XY', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('P', flags=Instrument.FLAG_GET, units='D', type=types.FloatType)
+        self.add_parameter('RP', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
         self.add_parameter('frequency', flags=Instrument.FLAG_GET, units='Hz', type=types.FloatType)
         self.add_parameter('tau', flags=Instrument.FLAG_GET, units='s', type=types.FloatType)
         self.add_parameter('amplitude', type=types.FloatType,
@@ -94,12 +96,13 @@ class SR7270_usb_210821(Instrument):
         Output:
             None
         '''
-        logging.info(__name__ + ' : get all from instrument')
         self.get_id()
         self.get_X()
         self.get_Y()
+        self.get_XY()
         self.get_R()
         self.get_P()
+        self.get_RP()
         self.get_frequency()
         self.get_tau()
         self.get_amplitude()
@@ -107,11 +110,18 @@ class SR7270_usb_210821(Instrument):
         self.get_ac_gain()
         
     def read_output(self,output):
-        logging.info(__name__ + ' : Reading parameter from instrument: %s ' %output)
-        readstr = self._visainstrument.ask('%s.\0' %output)
-        readvalue = float(readstr[:-4])
-        return readvalue  
-  
+        self._write(output)
+        ans = self._read()
+        readvalue = float(ans)
+        return readvalue
+    
+    def _write(self,msg):
+        self._visainstrument.write('%s.\0' %msg)
+        
+    def _read(self):
+        ans = self._visainstrument.read()
+        return ans[:-4]
+
     def _do_get_id(self):
         return "%s, %s, %s"%(self._visainstrument.ask('ID\0')[:-4],self._visainstrument.ask('VER\0')[:-4],self._visainstrument.ask('DATE\0')[:-4])
         
@@ -126,6 +136,22 @@ class SR7270_usb_210821(Instrument):
         Read out Y of the Lock In
         '''
         return self.read_output('Y')
+        
+    def _do_get_XY(self,flag=0):
+        '''
+        Read X and Y
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag==1:
+            self._write('XY')
+            return None
+        elif flag==2:
+            ans = self._read()
+            return [float(i) for i in ans.split(',')]
+        else:
+            self._write('XY')
+            ans = self._read()
+            return [float(i) for i in ans.split(',')]
 
     def _do_get_R(self):
         '''
@@ -138,6 +164,22 @@ class SR7270_usb_210821(Instrument):
         Read out X of the Lock In
         '''
         return self.read_output('PHA')
+        
+    def _do_get_RP(self,flag=0):
+        '''
+        Read R and P
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag==1:
+            self._write('MP')
+            return None
+        elif flag==2:
+            ans = self._read()
+            return [float(i) for i in ans.split(',')]
+        else:
+            self._write('MP')
+            ans = self._read()
+            return [float(i) for i in ans.split(',')]
         
     def _do_get_frequency(self):
         return self.read_output('OF')
