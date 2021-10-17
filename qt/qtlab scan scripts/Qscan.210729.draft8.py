@@ -438,7 +438,7 @@ class get_set():
       
         print
         
-    def take_data_separately(self):
+    def take_data(self):
         val = []
         for instr, para_name, label in self._query_list:
             if instr is not None:
@@ -450,7 +450,7 @@ class get_set():
         val += self.get_prcss(val)#add processed data
         return val
     
-    def take_data(self):
+    def take_data_nonatomic(self):
         # flag 0 (default): write command and read respond, 1: write only, 2: read only
         val = []
         for instr, para_name, label in self._query_list:
