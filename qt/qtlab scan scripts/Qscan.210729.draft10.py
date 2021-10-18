@@ -473,7 +473,7 @@ class get_set():
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
     
-    def _set_vals(self, setpoint_list):
+    def do_set_nonatomic(self, setpoint_list):
         '''
         Set a list of channels
         input:
@@ -489,16 +489,21 @@ class get_set():
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
             para = instr.get_parameters()[para_name]
-            pv = para['value']
-            if pv is None:
-                pv = instr.get(para_name)
-            d = pv - sv
-            pv_list.append(pv)
-            delta_list.append(d)
-            if step==0 or step>para['maxstep']:
-                step = para['maxstep']
-            if delay<para['stepdelay']:
-                delay = para['stepdelay']
+            if 'maxstep' in para:# channels like DAC
+                pv = para['value']
+                if pv is None:
+                    pv = instr.get(para_name)
+                d = pv - sv
+                pv_list.append(pv)
+                delta_list.append(d)
+                if step==0 or step>para['maxstep']:
+                    step = para['maxstep']
+                if delay<para['stepdelay']:
+                    delay = para['stepdelay']
+            else:# channels like magnet
+                pv_list.append(sv)
+                delta_list.append(0)
+                instr.set(para_name, sv)
 
         sign_list = [int(i<0)*2-1 for i in delta_list]
         
@@ -519,6 +524,17 @@ class get_set():
                 break
             else:
                 qt.msleep(delay/1000.)
+                
+    def do_set(self, setpoint_list):
+        '''
+        Set a list of channels
+        input:
+            setpoint_list: a list of setpoints. A setpoint is like [instr_name, para_name, sv]
+        '''
+        for i in setpoint_list:
+            instr_name, para_name, sv = i
+            instr = qt.instruments.get(instr_name)
+            instr.set(para,sv)
 
     def get_setpoint(self,chan,val):
         if self.is_dac_name(chan):
@@ -535,7 +551,7 @@ class get_set():
             items = self.get_setpoint(i,j)
             if items is not None:
                 setpoint_list.extend(items)
-        self._set_vals(setpoint_list)
+        self.do_set(setpoint_list)
 
     def get_rate(self,chan):
         '''get rates from an output channel, keep update with set_val!'''
