@@ -448,7 +448,7 @@ class get_set():
                 
         if atomic_read:
             print2('Some get_func\'s do not have argument "flag", use atomic read (slower).\n','red')
-            g.take_data = g.take_data_atomic
+            self.take_data = self.take_data_atomic
         print
         
     def take_data_atomic(self):
