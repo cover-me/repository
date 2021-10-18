@@ -19,6 +19,7 @@ from lib.file_support.spyview import SpyView
 from time import time, strftime
 from shutil import copyfile, rmtree
 from tempfile import mkdtemp
+import inspect
 
 class qtplot_client():
     '''A client for real-time plotting in qtplot'''
@@ -327,7 +328,7 @@ class easy_scan():
         if len(np.shape(ylbl))==0:
             ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
         if len(np.shape(zlbl))==0:
-            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
+            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend] 
 
         #send message to word
         # print2('','scan',True)#set font color
@@ -402,6 +403,7 @@ class get_set():
         self._query_list = []
         self._prcss_labels = ['time']
         self._prcss_funs = []
+        atomic_read = False
 
         # channels_to_read: [('keithley1','readnextval','V'),('lockin1','X&Y','e-3V,exc0.1uA')]
         # a channel is what qtlab calls a parameter
@@ -409,10 +411,18 @@ class get_set():
             instr = qt.instruments.get(instr_name)
             
             # check if the channel is availabel
-            if instr is None or para_name not in instr.get_parameters():
-                print2('Some instruments you want to read has not been loaded by qtlab.','red')
+            if instr is None:
+                print2('Instrument %s not exists.'%instr_name,'red')
                 sys.exit()
-             
+            else:
+                p = instr.get_parameters()
+                if para_name not in p:
+                    print2('Reading channel %s not exists.'%para_name,'red')
+                    sys.exit()                    
+                else:
+                    if 'flag' not in inspect.getargspec(p[para_name]['get_func']).args:
+                        atomic_read = True
+            
             # If the reading is a list (e.g., lockin X and Y).
             if para_name in ['XY', 'RP']:
                 self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,para_name[0],label)])
@@ -435,10 +445,13 @@ class get_set():
             if hasattr(instr,'get_all'):
                 print 'get_all:\t', instr_name
                 instr.get_all()
-      
+                
+        if atomic_read:
+            print2('Some get_func\'s do not have argument "flag", use atomic read (slower).\n','red')
+            g.take_data = g.take_data_atomic
         print
         
-    def take_data(self):
+    def take_data_atomic(self):
         val = []
         for instr, para_name, label in self._query_list:
             if instr is not None:
@@ -450,7 +463,7 @@ class get_set():
         val += self.get_prcss(val)#add processed data
         return val
     
-    def take_data_nonatomic(self):
+    def take_data(self):
         # flag 0 (default): write command and read respond, 1: write only, 2: read only
         val = []
         for instr, para_name, label in self._query_list:
@@ -473,18 +486,17 @@ class get_set():
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
     
-    def do_set_nonatomic(self, setpoint_list):
+    def do_set(self, setpoint_list):
         '''
         Set a list of channels
         input:
             setpoint_list: a list of setpoints. A setpoint is like [instr_name, para_name, sv]
         '''
-        step = 0
         delay = 0
+        step_list = []
         pv_list = []
-        delta_list = []
-        
-        # calculate step, delay, pv_list, delta_list, sign_list
+        delta_list = [] 
+        # calculate delay, step_list, et al..
         for i in setpoint_list:
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
@@ -494,10 +506,9 @@ class get_set():
                 if pv is None:
                     pv = instr.get(para_name)
                 d = pv - sv
+                step_list.append(para['maxstep'])
                 pv_list.append(pv)
                 delta_list.append(d)
-                if step==0 or step>para['maxstep']:
-                    step = para['maxstep']
                 if delay<para['stepdelay']:
                     delay = para['stepdelay']
             else:# channels like magnet
@@ -513,9 +524,9 @@ class get_set():
                 if delta_list[i] != 0:
                     instr_name, para_name, sv = setpoint_list[i]
                     instr = qt.instruments.get(instr_name)
-                    if abs(delta_list[i])> step:
-                        pv_list[i] += sign_list[i] * step
-                        delta_list[i] += sign_list[i] * step
+                    if abs(delta_list[i])> step_list[i]:
+                        pv_list[i] += sign_list[i] * step_list[i]
+                        delta_list[i] += sign_list[i] * step_list[i]
                     else:
                         pv_list[i] = sv
                         delta_list[i] = 0
@@ -525,7 +536,7 @@ class get_set():
             else:
                 qt.msleep(delay/1000.)
                 
-    def do_set(self, setpoint_list):
+    def do_set_atomic(self, setpoint_list):
         '''
         Set a list of channels
         input:
