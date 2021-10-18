@@ -534,7 +534,7 @@ class get_set():
         for i in setpoint_list:
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
-            instr.set(para,sv)
+            instr.set(para_name,sv)
 
     def get_setpoint(self,chan,val):
         if self.is_dac_name(chan):
