@@ -434,7 +434,7 @@ class get_set():
             # Clear GPIB, usb buffer, get_all
             insObj = instr._ins
             if hasattr(insObj,'_address'):
-                if insObj._address.startswith('GPIB'):
+                if insObj._address.startswith('GPIB') or insObj._address.startswith('TCPIP'):
                     if hasattr(insObj,'_visainstrument'):
                         print 'visa_clear:\t%s'%instr_name
                         insObj._visainstrument.clear()#clear the buffer
