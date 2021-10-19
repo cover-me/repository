@@ -16,7 +16,7 @@ import visa
 import types
 import logging
 
-class LPR_2021_08_02(Instrument):
+class LPR_211018(Instrument):
     '''
     This is the python driver for the Oxford Instruments IPS 120 Magnet Power Supply
 
@@ -95,23 +95,15 @@ class LPR_2021_08_02(Instrument):
         self.get_R_still()
         self.get_R_cold()
         self.get_R_MC()
-        
-    # Functions
-    def _execute(self, message):
-        '''
-        Write a command to the device
 
-        Input:
-            message (str) : write command for the device
-
-        Output:
-            None
-        '''
-        logging.info(__name__ + ' : Send the following command to the device: %s' % message)
-        self._visainstrument.write(message)
-        sleep(5e-3) # wait for the device to be able to respond
-        result = self._visainstrument.read()
-        return result
+    def _execute(self, message, flag=0):
+        '''flag, 0 (default): write command and read respond, 1: write only, 2: read only'''
+        if  flag != 2:
+            self._visainstrument.write(message)
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return ans
+        return None
 
     def do_get_3K(self):
         result = self._execute('0')
@@ -125,9 +117,10 @@ class LPR_2021_08_02(Instrument):
         result = self._execute('2')
         return float(result)
         
-    def do_get_MC(self):
-        result = self._execute('3')
-        return float(result)
+    def do_get_MC(self, flag=0):
+        result = self._execute('3', flag)
+        if result:
+            return float(result)
 
     def do_get_R_3K(self):
         result = self._execute('10')
