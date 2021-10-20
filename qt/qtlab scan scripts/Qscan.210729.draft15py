@@ -125,23 +125,32 @@ class easy_scan():
         # setting values, or coordinates
         self._coolabels = []
 
-        for i,j,k in zip(xpnt,xlbl,xchan):
+        for i,j,k,n in zip(xpnt,xlbl,xchan,range(len(xchan))):
             coolabel = '%s_(%s)'%(k,j)
             self._coolabels.append(coolabel)
-            if bwd:
-                data.add_coordinate(coolabel,size=len(i),start=i[-1],end=i[0])
+            if n==0:
+                if bwd:
+                    data.add_coordinate(coolabel,size=len(i),start=i[-1],end=i[0])
+                else:
+                    data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
             else:
-                data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
+                data.add_value(coolabel)
 
-        for i,j,k in zip(ypnt,ylbl,ychan):
+        for i,j,k,n in zip(ypnt,ylbl,ychan,range(len(ychan))):
             coolabel = '%s_(%s)'%(k,j)
             self._coolabels.append(coolabel)
-            data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
+            if n==0:
+                data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
+            else:
+                data.add_value(coolabel)
             
-        for i,j,k in zip(zpnt,zlbl,zchan):
+        for i,j,k,n in zip(zpnt,zlbl,zchan,range(len(zchan))):     
             coolabel = '%s_(%s)'%(k,j)
             self._coolabels.append(coolabel)
-            data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
+            if n==0:
+                data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
+            else:
+                data.add_value(coolabel)
         
         # reading values
         for i in self._vallabels:
