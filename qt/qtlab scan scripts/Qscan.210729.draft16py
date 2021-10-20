@@ -634,7 +634,7 @@ def print2(s,style='',hold=False):
 # source information
 SRC_INFO = {
     '10 mV/V':[1.e-2,'V(e-2mV)'],
-    '10 uA/V':[1.e-5,'I(e-2uA)'],'100 uA/V':[1.e-4,'I(e-1uA)']
+    '1 uA/V':[1.e-6,'I(nA)'],'10 uA/V':[1.e-5,'I(e-2uA)'],'100 uA/V':[1.e-4,'I(e-1uA)']
     }
 # measure information
 MSR_INFO = {
@@ -660,6 +660,8 @@ def get_SD_info(dev):
         meas_amp_ac = MSR_INFO[msr['module'][2]][0]
         meas_unit_ac = MSR_INFO[msr['module'][2]][1]+',exc%su'%(LOCKIN_AMP*1e-2*src_amp*1e6)
         print meas_channel_ac, meas_unit_ac
+    else:
+        meas_unit_ac = None
     return src_unit, meas_unit_dc, meas_unit_ac
 
 TERM_WIDTH = get_term_width()-1
