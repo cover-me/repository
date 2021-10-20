@@ -455,7 +455,9 @@ class get_set():
                 print 'get_all:\t', instr_name
                 instr.get_all()
                 
-        if atomic_read:
+        if len(channels_to_read)==1:
+            self.take_data = self.take_data_atomic
+        elif atomic_read:
             print2('Some get_func\'s do not have argument "flag", use atomic read (slower).\n','red')
             self.take_data = self.take_data_atomic
         print
