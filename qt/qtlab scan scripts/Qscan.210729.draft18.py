@@ -507,11 +507,19 @@ class get_set():
         step_list = []
         pv_list = []
         delta_list = [] 
-        # calculate delay, step_list, et al..
+        # parepare for setting channels
         for i in setpoint_list:
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
             para = instr.get_parameters()[para_name]
+            
+            if 'minval' in para and sv < para['minval']:
+                print2('Trying to set too small value: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
+                sys.exit()
+            if 'maxval' in para and sv > para['maxval']:
+                print2('Trying to set too large value: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
+                sys.exit()
+                
             if 'maxstep' in para:# channels like DAC
                 pv = para['value']
                 if pv is None:
@@ -529,7 +537,7 @@ class get_set():
 
         sign_list = [int(i<0)*2-1 for i in delta_list]
         
-        # ramp channels
+        # do setting
         while 1:
             for i in range(len(setpoint_list)):
                 if delta_list[i] != 0:
