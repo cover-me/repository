@@ -172,18 +172,31 @@ class easy_scan():
             f.close()
         data._file.flush()
         return data
+        
+    def _paraok_scan_shape(self,lbl,chan,pnt):
+        '''Check the dimensions and lengths'''
+        return (1==len(np.shape(lbl))==len(np.shape(chan))==(len(np.shape(pnt))-1) and len(lbl)==len(chan)==len(pnt))
+        
+    def _paraok_scan_range(self,lbl,chan,pnt):
+        '''Check if the set value in range'''
+        for i,j,k in zip(lbl,chan,pnt):
+            vmin = np.min(k)
+            vmax = np.max(k)
+            for val in [vmin,vmax]:
+                for instr_name, para_name, sv in g.get_setpoint(j,val):
+                    if not g.is_in_range(instr_name, para_name, sv):
+                        return False
+        return True
+    
     def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt):
         '''check whether parameters are OK for self._scan()'''
-        isok = True
-        if not (1==len(np.shape(xlbl))==len(np.shape(xchan))==(len(np.shape(xpnt))-1) and len(xlbl)==len(xchan)==len(xpnt)):
-            isok = False
-        if not (1==len(np.shape(ylbl))==len(np.shape(ychan))==(len(np.shape(ypnt))-1) and len(ylbl)==len(ychan)==len(ypnt)):
-            isok = False            
-        if not (1==len(np.shape(zlbl))==len(np.shape(zchan))==(len(np.shape(zpnt))-1) and len(zlbl)==len(zchan)==len(zpnt)):
-            isok = False
-        if not isok:            
-            print2('_scan(): Parameter error','red')
-            sys.exit()
+        for lbl,chan,pnt in [[xlbl,xchan,xpnt],[ylbl,ychan,ypnt],[zlbl,zchan,zpnt]]:
+            if not self._paraok_scan_shape(lbl,chan,pnt):
+                print2('_scan(): Parameter shape error','red')
+                sys.exit()
+            if not self._paraok_scan_range(lbl,chan,pnt):
+                print2('_scan(): Parameter range error','red')
+                sys.exit()            
 
     def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
@@ -337,7 +350,7 @@ class easy_scan():
         if len(np.shape(ylbl))==0:
             ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
         if len(np.shape(zlbl))==0:
-            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend] 
+            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
 
         #send message to word
         # print2('','scan',True)#set font color
@@ -496,6 +509,17 @@ class get_set():
 
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
+        
+    def is_in_range(self, instr_name, para_name, sv):
+        instr = qt.instruments.get(instr_name)
+        if instr:
+            para = instr.get_parameters()[para_name]
+            if 'minval' in para and sv < para['minval']:
+                return False
+            if 'maxval' in para and sv > para['maxval']:
+                return False
+        return True
+        
     
     def do_set(self, setpoint_list):
         '''
@@ -513,11 +537,8 @@ class get_set():
             instr = qt.instruments.get(instr_name)
             para = instr.get_parameters()[para_name]
             
-            if 'minval' in para and sv < para['minval']:
-                print2('Trying to set too small value: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
-                sys.exit()
-            if 'maxval' in para and sv > para['maxval']:
-                print2('Trying to set too large value: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
+            if not self.is_in_range(instr_name, para_name, sv):
+                print2('Value out of range: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
                 sys.exit()
                 
             if 'maxstep' in para:# channels like DAC
