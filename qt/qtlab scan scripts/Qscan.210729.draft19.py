@@ -183,9 +183,11 @@ class easy_scan():
             vmin = np.min(k)
             vmax = np.max(k)
             for val in [vmin,vmax]:
-                for instr_name, para_name, sv in g.get_setpoint(j,val):
-                    if not g.is_in_range(instr_name, para_name, sv):
-                        return False
+                spt = g.get_setpoint(j,val)
+                if spt:
+                    for instr_name, para_name, sv in spt:
+                        if not g.is_in_range(instr_name, para_name, sv):
+                            return False
         return True
     
     def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt):
