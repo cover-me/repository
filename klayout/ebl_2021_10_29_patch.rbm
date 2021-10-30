@@ -1,0 +1,129 @@
+# https://github.com/cover-me/repository/tree/master/klayout
+# 20190720
+# how to use: copy .rbm file to \AppData\Roaming\KLayout (64bit), Klayout version: 0.24.9, find scripts in 'Tools' menu
+class MenuAction < RBA::Action
+  def initialize( title, shortcut, &action ) 
+    self.title = title
+    self.shortcut = shortcut
+    @action = action
+  end
+  def triggered 
+    @action.call( self ) 
+  end
+private
+  @action
+end
+
+
+
+$patches_for_wf = MenuAction.new("Patches for L51(to L53, 200 um WF)", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = 0
+  lp_a = nil
+  lp_b = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 51
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 53
+      lp_b = lp.layer_index
+    end
+    iter.next
+  end
+  (lp_a && lp_b) || raise("Missing layer 51 or 53!")
+  mask = RBA::Region::new
+  subjects = RBA::Region::new
+  # get all objects
+  lv.cellview(cv_index).cell.shapes(lp_a).each do |shape|
+    cv_index ||= obj.cv_index
+    subjects.insert(shape.polygon)
+  end
+  cv_index || raise("No objects in layer51!")
+  wf_len = 100000*2# write field 200 um, 1000 = 1 um
+  pat_width = 1000# patch width 1 um
+  dx = (wf_len-pat_width)/2
+  b_left = subjects.bbox.left/wf_len*wf_len-wf_len#choose a boundary divisible by wf_len
+  b_right = subjects.bbox.right/wf_len*wf_len+wf_len
+  b_top = subjects.bbox.top/wf_len*wf_len+wf_len
+  b_bottom = subjects.bbox.bottom/wf_len*wf_len-wf_len
+  x = b_left + wf_len/2
+  # create masks
+  while x<b_right
+    y = b_bottom + wf_len/2
+    while y<b_top+wf_len
+      mask.insert(RBA::Box::new(x-dx,y-dx,x+dx,y+dx))
+      y += wf_len
+    end
+    x += wf_len
+  end
+  begin 
+    lv.transaction("Patches for L51(to L53, 200 um WF)")  
+    patches  = subjects - mask
+    lv.cellview(cv_index).cell.shapes(lp_b).insert(patches)
+  ensure
+    lv.commit
+  end
+end
+
+$patches_for_wf2 = MenuAction.new("Patches for L52(to L54, 200 um WF)", "" ) do
+  mw = RBA::Application::instance.main_window
+  lv = mw.current_view || raise("No layout loaded")
+  cv_index = 0
+  lp_a = nil
+  lp_b = nil
+  iter = lv.begin_layers
+  while !iter.at_end?
+    lp = iter.current
+    if lp.source_layer == 52
+      lp_a = lp.layer_index
+    end
+    if lp.source_layer == 54
+      lp_b = lp.layer_index
+    end
+    iter.next
+  end
+  (lp_a && lp_b) || raise("Missing layer 52 or 54!")
+  mask = RBA::Region::new
+  subjects = RBA::Region::new
+  # get all objects
+  lv.cellview(cv_index).cell.shapes(lp_a).each do |shape|
+    cv_index ||= obj.cv_index
+    subjects.insert(shape.polygon)
+  end
+  cv_index || raise("No objects in layer51!")
+  wf_len = 100000*2# write field 200 um, 1000 = 1 um
+  pat_width = 1000# patch width 1 um
+  dx = (wf_len-pat_width)/2
+  b_left = subjects.bbox.left/wf_len*wf_len-wf_len#choose a boundary divisible by wf_len
+  b_right = subjects.bbox.right/wf_len*wf_len+wf_len
+  b_top = subjects.bbox.top/wf_len*wf_len+wf_len
+  b_bottom = subjects.bbox.bottom/wf_len*wf_len-wf_len
+  x = b_left + wf_len/2
+  # create masks
+  while x<b_right
+    y = b_bottom + wf_len/2
+    while y<b_top+wf_len
+      mask.insert(RBA::Box::new(x-dx,y-dx,x+dx,y+dx))
+      y += wf_len
+    end
+    x += wf_len
+  end
+  begin 
+    lv.transaction("Patches for L51(to L53, 200 um WF)")  
+    patches  = subjects - mask
+    lv.cellview(cv_index).cell.shapes(lp_b).insert(patches)
+  ensure
+    lv.commit
+  end
+end
+
+app = RBA::Application.instance
+mw = app.main_window
+menu = mw.menu
+menu.insert_separator("tools_menu.end", "EBL")
+menu.insert_item("tools_menu.end", "Patches_for_L51(to L53, 100 um WF)", $patches_for_wf)
+menu.insert_item("tools_menu.end", "Patches_for_L52(to L54, 100 um WF)", $patches_for_wf2)
+
