@@ -1,6 +1,6 @@
 # https://github.com/cover-me/repository/tree/master/klayout
-# 20190720
-# how to use: copy .rbm file to \AppData\Roaming\KLayout (64bit), Klayout version: 0.24.9, find scripts in 'Tools' menu
+# how to use: copy all .rbm files to \AppData\Roaming\KLayout (64bit), Klayout version: 0.24.9 or 0.24.10, find scripts in 'Tools' menu
+
 class MenuAction < RBA::Action
   def initialize( title, shortcut, &action ) 
     self.title = title
@@ -13,8 +13,6 @@ class MenuAction < RBA::Action
 private
   @action
 end
-
-
 
 $patches_for_wf = MenuAction.new("Patches for L51(to L53, 200 um WF)", "" ) do
   mw = RBA::Application::instance.main_window
