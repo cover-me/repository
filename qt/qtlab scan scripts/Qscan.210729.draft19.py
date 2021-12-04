@@ -236,6 +236,7 @@ class easy_scan():
         STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
+        print2('Scan information\n', 'cyan')
         qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,len(self._coolabels)+len(self._vallabels),xpnt,ypnt,zpnt)
         qclient.update_plot()
@@ -243,7 +244,7 @@ class easy_scan():
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         print 'Labels:', self._coolabels + self._vallabels
         print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
-        print '...\nctrl+e: exit more safely; ctrl+n: next scan.'
+        print2('ctrl+e: exit more safely; ctrl+n: exit current scan, continue script.\n','cyan')
         self.user_interrrupt = False
         ############# scan #############
         try:
@@ -456,6 +457,7 @@ class get_set():
                 self._query_list.append([instr,para_name,'%s (%s)'%(instr_name,label)])
 
             # Clear GPIB, usb buffer, get_all
+            print2('Clear buffers\n','cyan')
             insObj = instr._ins
             if hasattr(insObj,'_address'):
                 if insObj._address.startswith('GPIB') or insObj._address.startswith('TCPIP'):
@@ -475,7 +477,6 @@ class get_set():
         elif atomic_read:
             print2('Some get_func\'s do not have argument "flag", use atomic read (slower).\n','red')
             self.take_data = self.take_data_atomic
-        print
         
     def take_data_atomic(self):
         val = []
@@ -654,7 +655,7 @@ def get_term_width():#get linewith of the console
     if a == 'Columns':
         return int(b)
 def print2(s,style='',hold=False):
-    stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[34m','magenta':'\033[35m','cyan':'\033[36m','white':'\033[37m',
+    stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[1;34m','magenta':'\033[35m','cyan':'\033[1;36m','white':'\033[37m',
                 'reset':'\033[0m','bold':'\033[1m',
                 'scan':'\033[36m','set':'\033[35m',
                 }
@@ -677,7 +678,7 @@ MSR_INFO = {
     }
 
 def get_SD_info(dev):
-    print 'Source drain info (for double check)'
+    print2('Source drain info (for double check)\n','cyan')
     src = dev['source']
     msr = dev['measure']
     src_channel = 'dac%d'%src['in'][0]
@@ -687,7 +688,7 @@ def get_SD_info(dev):
     meas_channel_ac = msr['out'][4]
     meas_amp_dc = MSR_INFO[msr['module'][1]][0]
     meas_unit_dc = MSR_INFO[msr['module'][1]][1]
-    print src_channel, src_unit
+    print src_channel, src_unit, '(need to change in e.scan(...) manually)'
     print meas_channel_dc, meas_unit_dc
     if LOCKIN_ON:
         meas_amp_ac = MSR_INFO[msr['module'][2]][0]
