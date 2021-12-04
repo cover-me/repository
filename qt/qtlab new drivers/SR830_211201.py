@@ -25,7 +25,7 @@ import visa
 import types
 import logging
 
-class SR830_211017(Instrument):
+class SR830_211201(Instrument):
     '''
     This is the python driver for the Lock-In SR830
     '''
@@ -70,6 +70,7 @@ class SR830_211017(Instrument):
         self.add_parameter('R', flags=Instrument.FLAG_GET, units='V', type=types.FloatType)
         self.add_parameter('P', flags=Instrument.FLAG_GET, units='deg', type=types.FloatType)
         self.add_parameter('RP', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
+        self.add_parameter('XYRP', flags=Instrument.FLAG_GET, units='V', type=types.ListType)
         self.add_parameter('status', flags=Instrument.FLAG_GET, units='', type=types.StringType)
         self.add_parameter('tau', type=types.StringType,
             flags=Instrument.FLAG_GETSET | Instrument.FLAG_GET_AFTER_SET, units='')
@@ -127,6 +128,7 @@ class SR830_211017(Instrument):
         self.get_R()
         self.get_P()
         self.get_RP()
+        self.get_XYRP()
         self.get_X()
         self.get_Y()
         self.get_XY()
@@ -242,7 +244,19 @@ class SR830_211017(Instrument):
             ans = self._visainstrument.read()
             return [float(i) for i in ans.split(',')]
         return None
-    
+
+    def _do_get_XYRP(self,flag=0):
+        '''
+        Read XYRP
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag != 2:
+            self._visainstrument.write('SNAP?1,2,3,4')
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return [float(i) for i in ans.split(',')]
+        return None
+
     def _do_get_status(self):
         '''
         Read the status byte of Lockin. 0 means no error.
