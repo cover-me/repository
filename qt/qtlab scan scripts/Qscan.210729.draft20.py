@@ -448,8 +448,8 @@ class get_set():
                     if 'flag' not in inspect.getargspec(p[para_name]['get_func']).args:
                         atomic_read = True
             
-            # If the reading is a list (e.g., lockin X and Y).
-            if para_name in ['XY', 'RP']:
+            # If the reading is a list (e.g., lockin X,Y,R,P).
+            if para_name in ['XY', 'RP', 'XYRP']:
                 self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,para_name[0],label)])
                 for i in list(para_name[1:]):
                     self._query_list.append([None,None,'%s_%s (%s)'%(instr_name,i,label)])
