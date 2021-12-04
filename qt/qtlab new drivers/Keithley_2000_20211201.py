@@ -37,7 +37,7 @@ def bool_to_str(val):
     else:
         return "OFF"
 
-class Keithley_2000(Instrument):
+class Keithley_2000_20211201(Instrument):
     '''
     This is the driver for the Keithley 2100 Multimeter
 
@@ -457,7 +457,7 @@ class Keithley_2000(Instrument):
 #           parameters
 # --------------------------------------
 
-    def do_get_readnextval(self):
+    def do_get_readnextval(self,flag=0):
         '''
         Waits for the next value available and returns it as a float.
         Note that if the reading is triggered manually, a trigger must
@@ -477,13 +477,14 @@ class Keithley_2000(Instrument):
             return float(0)
         self._trigger_sent = False
 
-        text = self._visainstrument.ask('DATA:FRESH?')
-            # Changed the query to from Data?
-            # to Data:FRESH? so it will actually wait for the
-            # measurement to finish.
-        return float(text[0:15])
+        if  flag != 2:# then write
+            self._visainstrument.write('DATA:FRESH?')
+        if flag != 1:# then read
+            ans = self._visainstrument.read()
+            return float(ans[0:15])
+        return None
 
-    def do_get_readlastval(self):
+    def do_get_readlastval(self, flag=0):
         '''
         Returns the last measured value available and returns it as a float.
         Note that if this command is send twice in one integration time it will
@@ -495,15 +496,19 @@ class Keithley_2000(Instrument):
         measurement, use get_readnextval.
 
         Input:
-            None
+            flag: 0 (default): write command and read respond, 1: write only, 2: read only
 
         Output:
             value(float) : last triggerd value on input
         '''
         logging.debug('Read last value')
 
-        text = self._visainstrument.ask('DATA?')
-        return float(text[0:15])
+        if  flag != 2:# then write
+            self._visainstrument.write('DATA?')
+        if flag != 1:# then read
+            ans = self._visainstrument.read()
+            return float(ans[0:15])
+        return None
 
     def do_get_readval(self, ignore_error=False):
         '''
