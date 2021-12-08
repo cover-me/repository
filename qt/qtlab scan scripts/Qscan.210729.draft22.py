@@ -245,7 +245,7 @@ class easy_scan():
         print 'Labels:', self._coolabels + self._vallabels
         print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
         print2('1. ctrl+e: exit safely; 2. Select any text: pause; 3. ctrl+c: forcely stop the script; ','cyan')
-        print2('Note: 1. It will wait for a setting operation, such as a field setting, to finish before exiting. 2. It only pauses the program, not instruments such as a magnet power supply or a heater. 3. IO errors may occur. Set values in GUI may need to be updated manually.\n')
+        print2('Note: These shortcuts only affect the software. The instruments (field, temperature) may still change their outputs. For ctrl+c: an IO error may occur, which can be cleared by clearing the buffer or getting any readings manually (not works for all instruments).\n')
         self.user_interrrupt = False
         ############# scan #############
         try:
