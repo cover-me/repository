@@ -1,6 +1,6 @@
 Suggestions on new drivers:
 
-1. Make get functions non-atomic by adding the parameter 'flag':
+1. Make get functions non-atomic by adding the parameter 'flag' ([details](https://cover-me.github.io/2021/10/17/data-taking-program-make-it-non-atomic.html)):
 
 ```python
 def _do_get_XY(self,flag=0):
@@ -27,4 +27,5 @@ def _check_last_pressed_key(self):
        last_key = msvcrt.getch()
     if last_key == '\x05':#ctrl+e(xit)
         raise KeyboardInterrupt
+        # or raise UserWarning('exit')
 ```
