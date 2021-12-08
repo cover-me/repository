@@ -11,6 +11,7 @@
 # 21.08.23 change keithley reading from lastval to nextval
 # 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
 # 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
+# 21.12.08 Remove "ctrl+n", better "ctrl+e"
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -236,7 +237,6 @@ class easy_scan():
         STR_TIMEINFO = '' 
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
-        print2('Scan information\n', 'cyan')
         qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
         qclient.set_file(dfpath,len(self._coolabels)+len(self._vallabels),xpnt,ypnt,zpnt)
         qclient.update_plot()
@@ -244,7 +244,8 @@ class easy_scan():
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         print 'Labels:', self._coolabels + self._vallabels
         print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
-        print2('ctrl+e: exit more safely; ctrl+n: exit current scan, continue script.\n','cyan')
+        print2('1. ctrl+e: exit safely; 2. Select any text: pause; 3. ctrl+c: forcely stop the script; ','cyan')
+        print2('Note: 1. It will wait for a setting operation, such as a field setting, to finish before exiting. 2. It only pauses the program, not instruments such as a magnet power supply or a heater. 3. IO errors may occur. Set values in GUI may need to be updated manually.\n')
         self.user_interrrupt = False
         ############# scan #############
         try:
@@ -281,10 +282,6 @@ class easy_scan():
                     counter += 1
                     STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xptlen,(t2-t0)*(numloops-counter)/60)
         ############# end scan #############
-        except UserWarning as warning:
-            if warning.message=='next':
-                print '\n\n'
-                pass
         except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
             print2('\n\nInterrupted by user','red')
             self.user_interrrupt = True
@@ -306,18 +303,16 @@ class easy_scan():
         self._sendToWord('%.1f, %s%s<return>'%(t_scan,dfname,dfname_bwd),addTimestamp=False)
         if self.user_interrrupt:
             sys.exit()
+
     def _scan1d(self,xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,y_val,z_val,is1d,qclient):#y_val=ypnt[:,iy],z_val=zpnt[:,iz]
         ix = 0 if is_fwd_now else (xptlen-1)
         index_end = xptlen-1-ix
-        issweeping = False
         while -1 < ix < xptlen:
-            #set xchans
-            if not issweeping:
-                g.set_vals(xchan,xpnt[:,ix])
+            #set xchans, check key pressed
+            g.set_vals(xchan,xpnt[:,ix])
             #delay before each point
             qt.msleep(delay2)
-            #get xchans
-         
+            #get xchan set values
             x_val = xpnt[:,ix]
 
             #take and log data
@@ -327,25 +322,19 @@ class easy_scan():
             if is_fwd_now or is1d:
                 qclient.add_data(datavalues)
                 qclient.update_plot()
-            #
-            last_key = ''
-            while msvcrt.kbhit():
-               last_key = msvcrt.getch()
-            if last_key == '\x05':#ctrl+e(xit)
-                raise KeyboardInterrupt
-            elif last_key == '\x0e':#ctrl+n(ext)
-                raise UserWarning('next')
+
             #change ix
             ix += 1 if is_fwd_now else -1
         d_item.new_block()
+
     def scan(self,
                xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
                ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
                zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False):
-        """
+        '''
         Each dimension can be a list of channels or a single channel, or empty.
         bwd: If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
-        """
+        '''
         #check parameters
         self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
         if len(np.shape(xlbl))==0:
@@ -356,7 +345,7 @@ class easy_scan():
             zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
 
         #send message to word
-        # print2('','scan',True)#set font color
+        print2('Scan\n', 'cyan')
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
@@ -477,7 +466,15 @@ class get_set():
         elif atomic_read:
             print2('Some get_func\'s do not have argument "flag", use atomic read (slower).\n','red')
             self.take_data = self.take_data_atomic
-        
+        print
+
+    def _check_last_pressed_key(self):
+        last_key = ''
+        while msvcrt.kbhit():
+           last_key = msvcrt.getch()
+        if last_key == '\x05':#ctrl+e(xit)
+            raise KeyboardInterrupt
+
     def take_data_atomic(self):
         val = []
         for instr, para_name, label in self._query_list:
@@ -528,7 +525,7 @@ class get_set():
         '''
         Set a list of channels
         input:
-            setpoint_list: a list of setpoints. A setpoint is like [instr_name, para_name, sv]
+            setpoint_list: a list of setpoints. [[instr_name1, para_name1, sv1], ...]
         '''
         delay = 0
         step_list = []
@@ -544,7 +541,7 @@ class get_set():
                 print2('Value out of range: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
                 sys.exit()
                 
-            if 'maxstep' in para:# channels like DAC
+            if 'maxstep' in para:# type 1 channels, like DAC
                 pv = para['value']
                 if pv is None:
                     pv = instr.get(para_name)
@@ -554,14 +551,15 @@ class get_set():
                 delta_list.append(d)
                 if delay<para['stepdelay']:
                     delay = para['stepdelay']
-            else:# channels like magnet
+            else:# type 2 channels, like magnet, set them here
                 pv_list.append(sv)
                 delta_list.append(0)
+                self._check_last_pressed_key()
                 instr.set(para_name, sv)
 
         sign_list = [int(i<0)*2-1 for i in delta_list]
         
-        # do setting
+        # set type 1 channels
         while 1:
             for i in range(len(setpoint_list)):
                 if delta_list[i] != 0:
@@ -573,6 +571,7 @@ class get_set():
                     else:
                         pv_list[i] = sv
                         delta_list[i] = 0
+                    self._check_last_pressed_key()
                     instr.set(para_name, pv_list[i])
             if all(d==0 for d in delta_list):# True if delta_list is empty
                 break
@@ -588,6 +587,7 @@ class get_set():
         for i in setpoint_list:
             instr_name, para_name, sv = i
             instr = qt.instruments.get(instr_name)
+            self._check_last_pressed_key()
             instr.set(para_name,sv)
 
     def get_setpoint(self,chan,val):
@@ -605,7 +605,10 @@ class get_set():
             items = self.get_setpoint(i,j)
             if items is not None:
                 setpoint_list.extend(items)
-        self.do_set(setpoint_list)
+        if setpoint_list:
+            self.do_set(setpoint_list)
+        else:
+            self._check_last_pressed_key()
 
     def get_rate(self,chan):
         '''get rates from an output channel, keep update with set_val!'''
