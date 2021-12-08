@@ -245,7 +245,7 @@ class easy_scan():
         print 'Labels:', self._coolabels + self._vallabels
         print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
         print2('1. ctrl+e: exit safely; 2. Select any text: pause; 3. ctrl+c: forcely stop the script; ','cyan')
-        print2('Note: These shortcuts only affect the software. The instruments (field, temperature) may still change their outputs. For ctrl+c: an IO error may occur, which can be cleared by clearing the buffer or getting any readings manually (not works for all instruments).\n')
+        print2('Note: These shortcuts only affect the software. The instruments (field, temperature) may still be changing their outputs, depending on the driver. For ctrl+c: an IO error may occur, which can be cleared by clearing the buffer or getting any readings once more (not works for instruments like SR830).\n')
         self.user_interrrupt = False
         ############# scan #############
         try:
