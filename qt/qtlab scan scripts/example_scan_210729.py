@@ -42,6 +42,9 @@ for i in []:# lockins
 
 ''' if you need to redefine the set function of e.scan()'''
 # add microwave source, dac field source
+def field_to_dac_val(val):
+    return 0
+    
 def get_setpoint2(self,chan,val):
     if self.is_dac_name(chan):
         return [['ivvi',chan,val],]
@@ -68,6 +71,7 @@ e = easy_scan()
 # e.scan(['I2(e-2uA)'],['dac2'],[-300],[300],100)
 # e.set('dac2',0)
 # e.scan(['Vg1(mV)'],['dac11'],[0],[100],200,bwd=True)
+# e.scan(['Vg1_Vg2(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)
 
 '''2d'''
 # e.scan(['I2(e-2uA)'],['dac2'],[-100],[100],150,['Vg2(mV)'],['dac12'],[-50],[50],50)
