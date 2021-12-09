@@ -234,7 +234,7 @@ class easy_scan():
         data_loop = [data,data_bwd]
         counter = 0#counter for scan
         global STR_TIMEINFO
-        STR_TIMEINFO = '' 
+        STR_TIMEINFO = ''
         numloops = yptlen*zptlen
         dfpath = data.get_filepath()
         qclient = qtplot_client(mmap2npy=True)#only works for 1 and 2d
@@ -244,8 +244,6 @@ class easy_scan():
         print 'File:', dfpath, '| %s'%os.path.split(dfpath_bwd)[1] if bwd else ''
         print 'Labels:', self._coolabels + self._vallabels
         print 'Scan: %d lines, %d points per line'%(numloops,xptlen)
-        print2('1. ctrl+e: exit safely; 2. Select any text: pause; 3. ctrl+c: forcely stop the script; ','cyan')
-        print2('Note: These shortcuts only affect the software. The instruments (field, temperature) may still be changing their outputs, depending on the driver. For ctrl+c: an IO error may occur, which can be cleared by clearing the buffer or getting any readings once more (not works for instruments like SR830).\n')
         self.user_interrrupt = False
         ############# scan #############
         try:
@@ -345,7 +343,8 @@ class easy_scan():
             zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
 
         #send message to word
-        print2('Scan\n', 'cyan')
+        print2('Scan.', 'cyan')
+        print2(' Exit: ctrl+e. Pause: select any text. For channels without "maxstep", e.g. the field, press ctrl+c (IO errors may occur) then manually reset the target value.\n')
         scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
         scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
         scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
@@ -377,27 +376,34 @@ class easy_scan():
         # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
+        
     def set(self,chan,val):
-        # print2('','set',True)#set font color
+        print2('Set.', 'cyan')
+        print2(' Exit: ctrl+e. Pause: select any text. For channels without "maxstep", e.g. the field, press ctrl+c (IO errors may occur) then manually reset the target value.\n')  
+        print2('Setting %s to %s...\n'%(chan, val))
         scanStr = "e.set('%s',%s)"%(chan,val)
-        if chan == 'ivvi':
-            dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
-            g.set_vals(dac_names,[val]*len(dac_names))
-        elif chan.endswith('_rate'):#ivvi_rate or dac*_rate
-            chan0 = chan[:-5]
-            delay = 30
-            scanStr += ', %s ms'%delay
-            if chan0 == 'ivvi':
+        try:
+            if chan == 'ivvi':
                 dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
-                for i in dac_names:
-                    ivvi.set_parameter_rate(i,val,delay)
-            elif g.is_dac_name(chan0):
-                    ivvi.set_parameter_rate(chan0,val,delay)
-        else:
-            g.set_vals([chan],[val])
+                g.set_vals(dac_names,[val]*len(dac_names))
+            elif chan.endswith('_rate'):#ivvi_rate or dac*_rate
+                chan0 = chan[:-5]
+                delay = 30
+                scanStr += ', %s ms'%delay
+                if chan0 == 'ivvi':
+                    dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
+                    for i in dac_names:
+                        ivvi.set_parameter_rate(i,val,delay)
+                elif g.is_dac_name(chan0):
+                        ivvi.set_parameter_rate(chan0,val,delay)
+            else:
+                g.set_vals([chan],[val])      
+        except KeyboardInterrupt:
+            print2('Interrupted by user\n','red')
+            scanStr += ' (interrupted by user)'
         self._sendToWord(scanStr+'<return>')
-        # print2('','')#set font to default
         print
+
     def more_scan(self,script_path):
         global this_file_path
         while os.path.isfile(script_path):
