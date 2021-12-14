@@ -43,3 +43,16 @@ def get_setpoint2(self,chan,val):
     return None
 get_set.get_setpoint = get_setpoint2
 ```
+
+
+# Main changes:
+- 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
+- 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
+- 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
+- 19.09.06 shortcuts ctrl+e and ctrl+n
+- 19.09.16 shifted scan, 3D scan, meander scan
+- 21.07.30 When taking data, write to all insturmens and then read, instead of write-read one by one.
+- 21.08.23 change keithley reading from lastval to nextval
+- 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
+- 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
+- 21.12.08 Remove "ctrl+n", improve "ctrl+e"
