@@ -1,17 +1,6 @@
-# A(n) all-in-one scan script for qtlab
-# Project page: https://github.com/cover-me/repository
-# Upgraded from sudc.py by Po
-# Main changes:
-# 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
-# 18.07.22 add _scan1d. auto qtplot now works with 1d bwd
-# 19.08.06 19.08.04 "Ding!" when a scan has finished. Load more scan without stopping current scan.
-# 19.09.06 shortcuts ctrl+e and ctrl+n
-# 19.09.16 shifted scan, 3D scan, meander scan
-# 21.07.30 When taking data, write to all insturmens and then read, instead of write-read one by one.
-# 21.08.23 change keithley reading from lastval to nextval
-# 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
-# 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
-# 21.12.08 Remove "ctrl+n", better "ctrl+e"
+# A script for scans.
+# Project page: https://github.com/cover-me/repository/tree/master/qt/qtlab scan scripts
+
 import qt,timetrack,sys,os,socket,winsound,msvcrt
 import IPython.core.interactiveshell as ips
 import numpy as np
@@ -99,7 +88,7 @@ class easy_scan():
         self._datapath=datapath if datapath.endswith('\\') else (datapath+'\\')
         self._generator=d.IncrementalGenerator(self._datapath+self._filename,1)#data number generator
         self._vallabels = g.get_vallabels()#value labels, [reading1, reading2, reading3, ..]
-        self._coolabels = ['','','']#coordinator labels, [output1, output2, output3]. Here, the first 3 column are called coordinators, the rest are called values.
+        self._coolabels = ['','','']# coordinator labels, coordinators are set values that are not got from instruments.
     def _print_progress(self,x,values,is_fwd_now):
         '''print the progress bar as well as readings to the console. The bar looks like (__?______?__)'''
         pbar_width = 5
