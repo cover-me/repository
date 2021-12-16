@@ -108,16 +108,18 @@ class easy_scan():
             print2('toWord: Can not find toWord.exe\n','red')
     def _create_data(self,
                     xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan,bwd=False):
-        '''Generate the data file, spyview .meta file and copy scan scripts.'''
+        '''Generate the data file, spyview .meta file (only useful for spyview) and copy scan scripts.'''
         qt.Data.set_filename_generator(self._generator)
         data = qt.Data(name=self._filename)
         
-        # setting values, or coordinates
+        # set values are also called coordinates, read values are values
         self._coolabels = []
 
         for i,j,k,n in zip(xpnt,xlbl,xchan,range(len(xchan))):
             coolabel = '%s_(%s)'%(k,j)
             self._coolabels.append(coolabel)
+            # only the first set value is added as the coordinate
+            # The size information is used when loading the data for qtplot or other programs
             if n==0:
                 if bwd:
                     data.add_coordinate(coolabel,size=len(i),start=i[-1],end=i[0])
@@ -193,12 +195,14 @@ class easy_scan():
     def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
         isok = True
+        # check if all 0d or 1d
         if not len(np.shape(xlbl))==len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
             isok = False
         if not len(np.shape(ylbl))==len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
             isok = False
         if not len(np.shape(zlbl))==len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
             isok = False
+        # check length if one dimensional
         if len(np.shape(xlbl))==1 and not len(xlbl)==len(xchan)==len(xstart)==len(xend):
             isok = False
         if len(np.shape(ylbl))==1 and not len(ylbl)==len(ychan)==len(ystart)==len(yend):
@@ -257,19 +261,22 @@ class easy_scan():
                     for d_item in data_loop:# there may be two sets of data (if bwd=True), one for sweeping forward and the other for sweeping backward
                         if d_item:
                             if is_fwd_now==False and is1d:
+                                # if 1d we want to show both forward and backward data
                                 print
                                 qclient.compare(data.get_data())
                                 qclient.close()
+                                
                                 qclient = qtplot_client(mute=(zptlen!=1),mmap2npy=True)
-                                qclient.set_file(dfpath_bwd,len(self._coolabels)+len(self._vallabels),xpnt[:,::-1],ypnt,zpnt)#1d data
+                                qclient.set_file(dfpath_bwd,len(self._coolabels)+len(self._vallabels),xpnt[:,::-1],ypnt,zpnt)
                                 qclient.update_plot()
+                    
                             self._scan1d(xchan,xpnt,xptlen,xlen,d_item,is_fwd_now,ypnt[:,iy],zpnt[:,iz],is1d,qclient)
                             is_fwd_now = not is_fwd_now
                     t2 = time()
                     counter += 1
                     STR_TIMEINFO = '%.3f,%.1f'%((t2-t1)/xptlen,(t2-t0)*(numloops-counter)/60)
         ############# end scan #############
-        except KeyboardInterrupt:#so the data file can be closed normally if one pressed ctrl+c
+        except KeyboardInterrupt:#if one pressed ctrl+c or ctrl+e
             print2('\n\nInterrupted by user','red')
             self.user_interrrupt = True
         print
@@ -295,7 +302,6 @@ class easy_scan():
         ix = 0 if is_fwd_now else (xptlen-1)
         index_end = xptlen-1-ix
         while -1 < ix < xptlen:
-            #set xchans, check key pressed
             g.set_vals(xchan,xpnt[:,ix])
             #delay before each point
             qt.msleep(delay2)
@@ -324,7 +330,7 @@ class easy_scan():
         '''
         #check parameters
         self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
-        if len(np.shape(xlbl))==0:
+        if len(np.shape(xlbl))==0:# if zero dimensional
             xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
         if len(np.shape(ylbl))==0:
             ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
@@ -362,7 +368,6 @@ class easy_scan():
         self._scan(xlbl,xchan,xpnt,
                ylbl,ychan,ypnt,
                zlbl,zchan,zpnt,bwd)
-        # print2('','')#set font to default
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
         
@@ -403,6 +408,7 @@ class easy_scan():
             print '========= more scan =========\n%s\n============================='%code_str
             this_file_path=code_str
             exec(code_str)
+
 class get_set():
     '''
     get readings, set outputs
@@ -547,6 +553,7 @@ class get_set():
                 if delay<para['stepdelay']:
                     delay = para['stepdelay']
             else:# type 2 channels, like magnet, set them here
+                step_list.append(0)
                 pv_list.append(sv)
                 delta_list.append(0)
                 self._check_last_pressed_key()
@@ -645,56 +652,20 @@ class get_set():
             p_val.append(i['function'](i['arg'],val))
         return p_val
 
-
-
-
 def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
     if a == 'Columns':
         return int(b)
+
 def print2(s,style='',hold=False):
     stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[1;34m','magenta':'\033[35m','cyan':'\033[1;36m','white':'\033[37m',
-                'reset':'\033[0m','bold':'\033[1m',
-                'scan':'\033[36m','set':'\033[35m',
+                'reset':'\033[0m','bold':'\033[1m'
                 }
     post = '' if hold else '\033[0m'
     if style in stylelist:
         ips.io.stdout.write('%s%s%s'%(stylelist[style],s,post))
     else:
         ips.io.stdout.write('%s%s%s'%(style,s,post))
-        
-# source information
-SRC_INFO = {
-    '10 mV/V':[1.e-2,'V(e-2mV)'],
-    '1 uA/V':[1.e-6,'I(nA)'],'10 uA/V':[1.e-5,'I(e-2uA)'],'100 uA/V':[1.e-4,'I(e-1uA)']
-    }
-# measure information
-MSR_INFO = {
-    # '1 MV/A':[1.e6,'e-6A',7100],'100 MV/A':[1.e8,'e-8A',106100],'1 GV/A':[1.e9,'e-9A',1006100],#old module
-    '1 MV/A':[1.e6,'e-6A',4440], '100 MV/A':[1.e8,'e-8A',16000],'1 GV/A':[1.e9,'e-9A',106000],#new module
-    '1 V/V':[1.,'V',None],'10 V/V':[1.e1,'e-1V',None], '100 V/V':[1.e2,'e-2V',None], '1 kV/V':[1.e3,'e-3V',None], '10 kV/V':[1.e4,'e-4V',None]
-    }
-
-def get_SD_info(dev):
-    print2('Source drain info (for double check)\n','cyan')
-    src = dev['source']
-    msr = dev['measure']
-    src_channel = 'dac%d'%src['in'][0]
-    src_amp = SRC_INFO[src['module'][1]][0]
-    src_unit = SRC_INFO[src['module'][1]][1]
-    meas_channel_dc = msr['out'][2]
-    meas_channel_ac = msr['out'][4]
-    meas_amp_dc = MSR_INFO[msr['module'][1]][0]
-    meas_unit_dc = MSR_INFO[msr['module'][1]][1]
-    print src_channel, src_unit, '(need to change in e.scan(...) manually)'
-    print meas_channel_dc, meas_unit_dc
-    if LOCKIN_ON:
-        meas_amp_ac = MSR_INFO[msr['module'][2]][0]
-        meas_unit_ac = MSR_INFO[msr['module'][2]][1]+',exc%su'%(LOCKIN_AMP*1e-2*src_amp*1e6)
-        print meas_channel_ac, meas_unit_ac
-    else:
-        meas_unit_ac = None
-    return src_unit, meas_unit_dc, meas_unit_ac
 
 TERM_WIDTH = get_term_width()-1
 STR_TIMEINFO=''
