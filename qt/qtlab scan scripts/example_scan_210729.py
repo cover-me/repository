@@ -1,4 +1,4 @@
-execfile('Qscan.210729.draft23.py')
+execfile('Qscan.211215.py')
 this_file_path = sys._getframe().f_code.co_filename
 
 '''File path'''
@@ -19,18 +19,14 @@ device1 = {
         'module': ('M2b', '1 kV/V', '1 kV/V'),# !!! change elsewhere: labels channels_to_read and lockin_list. First is dc amp, second is ac amp
         },
     'gates': ('5, dac11, 1 V/V'),# !!! change elsewhere: labels in e.scan. 
-    }
-
-'''Print source-drain info for double check'''
-# This does not work very well...
-# label_src, label_meas_dc, label_meas_ac = get_SD_info(device1)
+}
 
 '''Other settings'''
 delay0,delay1,delay2 = (0,0.5,0.035)# Delays after setting Z (and Y0), Y (and X0), X. Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
-channels_to_read = [('keithley1','readnextval','e-3V')]#, ('lockin1', 'XY', label_meas_ac)# ('fridge', 'MC', 'K')
+channels_to_read = [('keithley1','readnextval','e-3V')]#, ('lockin1', 'XY', 'e-3V,ac10nA')]# ('fridge', 'MC', 'K')
 
 '''initialize instruments'''
-qt.instruments.get('fridge').get_all()
+# qt.instruments.get('fridge').get_all()
 for i in []:# lockins
     qt.instruments.get(i)._ins._visainstrument.clear()
     qt.instruments.get(i).set_amplitude(4e-3)# 4e-3. for SR830, 0 for other lockins.
