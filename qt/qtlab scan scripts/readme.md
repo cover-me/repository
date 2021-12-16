@@ -38,9 +38,9 @@ e.scan(['Vg1_Vg2(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)
 
 ```
 
-# Non-linear scan?
+# Special scans?
 
-A linear scan is a scan whose set values changes linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2). This can be done by writing a driver for vector magnets, or more simply, redefine the set function for e.scan() in the scan script (see the file "example_scan_210729.py"). For example,
+A linear scan is a scan whose set values change linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2). This can be done by writing a driver for vector magnets, or more simply, redefine the set function for e.scan() in the scan script (see the file "example_scan_210729.py"). For example,
 
 ```python
 B_TOT = 1
