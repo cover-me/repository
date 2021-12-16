@@ -10,6 +10,33 @@ Qscan.py makes them work together, providing two major functions: `easy_scan.sca
 
 Demos are available [here](https://cover-me.github.io/2019/03/31/qtplot-demo.html), though they may be a little out of date.
 
+# Minimal working example
+
+```python
+# minimal working example.py
+
+execfile('Qscan.211215.py')
+this_file_path = sys._getframe().f_code.co_filename
+
+'''File path'''
+datapath=r'C:\qtlab\data\user1_pc1'+'\\%s'%strftime('%Y-%m')
+filename='datPC1%s'%strftime('%y%m')
+
+'''Other settings'''
+delay0,delay1,delay2 = (0,0.5,0.035)# Delays after setting Z (and Y0), Y (and X0), X. Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
+channels_to_read = [('keithley1','readnextval','e-3V'), ('lockin1', 'XY', 'e-3V,ac10nA')]# ('fridge', 'MC', 'K')
+
+g = get_set()
+e = easy_scan()
+
+'''measure'''
+# labels, channels, start, end, number of steps ( = point number -1)
+
+# e.scan(['I2(e-2uA)'],['dac2'],[-300],[300],100)
+# e.set('dac2',0)
+e.scan(['Vg1_Vg2(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)
+
+```
 
 # Non-linear scan?
 
