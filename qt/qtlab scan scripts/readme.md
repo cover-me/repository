@@ -56,3 +56,4 @@ get_set.get_setpoint = get_setpoint2
 - 21.10.12 Remove meander, shift, xswp_by_mchn, Store all channels when multiple channels are scanned
 - 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
 - 21.12.08 Remove "ctrl+n", improve "ctrl+e"
+- 21.12.15 clean up
