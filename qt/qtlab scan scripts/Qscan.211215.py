@@ -376,6 +376,7 @@ class easy_scan():
         print2(' Exit: ctrl+e. Pause: select any text. For channels without "maxstep", e.g. the field, press ctrl+c (IO errors may occur) then manually reset the target value.\n')  
         print2('Setting %s to %s...\n'%(chan, val))
         scanStr = "e.set('%s',%s)"%(chan,val)
+        user_interrrupt = False
         try:
             if chan == 'ivvi':
                 dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
@@ -393,10 +394,13 @@ class easy_scan():
             else:
                 g.set_vals([chan],[val])      
         except KeyboardInterrupt:
+            user_interrrupt = True
             print2('Interrupted by user\n','red')
             scanStr += ' (interrupted by user)'
         self._sendToWord(scanStr+'<return>')
         print
+        if user_interrrupt:
+            sys.exit()
 
     def more_scan(self,script_path):
         global this_file_path
