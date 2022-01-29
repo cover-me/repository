@@ -38,9 +38,9 @@ e.scan(['Vg1_Vg2(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)
 
 ```
 
-# Special scans?
+# Special scans
 
-A linear scan is a scan whose set values change linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2). This can be done by writing a driver for vector magnets, or more simply, redefine the set function for e.scan() in the scan script (see the file "example_scan_210729.py"). For example,
+A linear scan is a scan whose set value changes linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2). Sometimes one needs to sweep a channel which is not defined in Qscan.py. We can of cause write a driver for vector magnets, or more simply, redefine the set function for e.scan() in the scan script (see the file "example_scan_210729.py").
 
 ```python
 B_TOT = 1
@@ -71,6 +71,54 @@ def get_setpoint2(self,chan,val):
 get_set.get_setpoint = get_setpoint2
 ```
 
+# Data processing during scan
+
+```python
+''' if you need to add processed data '''
+def get_isw(arg_dict,val):
+    '''
+    Get the switching current
+    All values are converted to SI unit, i.e., V, A, ...
+    '''
+    dc_offset = -6e-6# When bias is zero, there is a dc offset in voltage readings
+    threshold_low = 3e-6 + dc_offset
+    threshold_high = 5e-6 + dc_offset
+    threshold_step = 1.000001
+    x0, x1, step = 0., 500., 10.
+    delay = 0.03
+    
+    while 1:
+        is_first_value = True
+        is_isw_found = False
+        for i in np.arange(x0, x1+step, step):
+            ivvi.set_dac2(i)
+            qt.msleep(delay)
+            v = qt.instruments.get('keithley1').get_readnextval()*1e-3
+            if is_first_value:
+                if v > threshold_low:# x0 is too large
+                    print 'x0 error'
+                    ivvi.set_dac2(0)
+                    return None
+                is_first_value = False
+            if v > threshold_high:
+                is_isw_found = True
+                if step < threshold_step:# Isw found
+                    ivvi.set_dac2(0)
+                    return i*1e-8
+                else:
+                    x0, x1 = i-step*3., i+step*3.
+                    step = step/10.#or 10.
+                    break
+
+        if not is_isw_found:# Isw not found in this round            
+            print 'Isw not found'
+            ivvi.set_dac2(0)
+            return None
+g = get_set()
+g._prcss_labels.append('Isw(A)')
+g._prcss_funs.append({'function':get_isw,'arg':None})
+e = easy_scan()
+```
 
 # Main changes:
 - 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
