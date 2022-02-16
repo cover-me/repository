@@ -119,6 +119,55 @@ g._prcss_labels.append('Isw(A)')
 g._prcss_funs.append({'function':get_isw,'arg':None})
 e = easy_scan()
 ```
+# Shifted field or dac
+
+```python
+def by_shift(by):
+    instr = qt.instruments.get('magnet')
+    para = instr.get_parameters()['field']
+    b = para['value']
+    if b is None:
+        b = instr.get(para_name)
+        
+    by = by - b/36.89
+    return by
+    
+''' if you need to redefine the set function of e.scan()'''
+# add microwave source, dac field source
+def get_setpoint2(self,chan,val):
+    if self.is_dac_name(chan):
+        return [['ivvi',chan,val],]
+    elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
+        return [[chan,'field',val],]
+    elif chan == 'dBy':
+        return [['ivvi','dac1',field_to_dac_val(val)],]
+    elif chan == 'By_shift':
+        return [['magnetY','field',by_shift(val)]]
+    elif chan == 'mw_power':
+        return [['mw','power',val],]
+    elif chan == 'mw_freq':
+        return [['mw','frequency',val],]
+    return None
+get_set.get_setpoint = get_setpoint2
+
+g = get_set()
+''' if you need to add processed data '''
+def get_by(arg_dict,val):
+    instr = qt.instruments.get('magnetY')
+    para = instr.get_parameters()['field']
+    by = para['value']
+    if by is None:
+        by = instr.get(para_name)
+    return by
+
+g._prcss_labels.append('By(T)')
+g._prcss_funs.append({'function':get_by,'arg':None})
+
+e = easy_scan()
+
+qt.instruments.get('magnetY')._ins.MARGIN=1e-3
+```
+
 
 # Main changes:
 - 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
