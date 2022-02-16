@@ -3,7 +3,7 @@
 
 # How does it work
 
-## Emulate a TCP/IP virtual instrument
+## Emulate a TCP/IP VISA instrument
 
 https://github.com/cover-me/tcp-visa-server
 
