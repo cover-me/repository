@@ -122,7 +122,7 @@ e = easy_scan()
 # Shifted field or dac
 
 ```python
-def by_shift(by):
+def by_shift(by):# shift By with a Bz-dependent value
     instr = qt.instruments.get('magnet')
     para = instr.get_parameters()['field']
     b = para['value']
@@ -133,7 +133,7 @@ def by_shift(by):
     return by
     
 ''' if you need to redefine the set function of e.scan()'''
-# add microwave source, dac field source
+# add "By_shift" channel
 def get_setpoint2(self,chan,val):
     if self.is_dac_name(chan):
         return [['ivvi',chan,val],]
@@ -152,6 +152,7 @@ get_set.get_setpoint = get_setpoint2
 
 g = get_set()
 ''' if you need to add processed data '''
+# We also want to log the original By
 def get_by(arg_dict,val):
     instr = qt.instruments.get('magnetY')
     para = instr.get_parameters()['field']
@@ -165,7 +166,7 @@ g._prcss_funs.append({'function':get_by,'arg':None})
 
 e = easy_scan()
 
-qt.instruments.get('magnetY')._ins.MARGIN=1e-3
+# qt.instruments.get('magnetY')._ins.MARGIN=1e-3
 ```
 
 
