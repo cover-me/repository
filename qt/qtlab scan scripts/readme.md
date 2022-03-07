@@ -123,6 +123,8 @@ e = easy_scan()
 
 ```python
 def by_shift(by):# shift By with a Bz-dependent value
+    # Get Bz
+    # Instead of getting Bz from the instrument, we get it from the qtlab, which is much faster. 
     instr = qt.instruments.get('magnet')
     para = instr.get_parameters()['field']
     b = para['value']
