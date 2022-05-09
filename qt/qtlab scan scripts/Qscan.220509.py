@@ -11,6 +11,35 @@ from shutil import copyfile, rmtree
 from tempfile import mkdtemp
 import inspect
 
+# overwrite the method qtlab used for checking data file count.
+def _check_last_number2(self, start):
+    # 10 ms for 724*3 files, tims is consumed by os.listdir
+
+    def get_max_file_num(folder):
+        if not os.path.isdir(folder):
+            return 0
+        # filename = basename + *_%d.dat
+        num_list = [int(i.split('_')[-1][:-4]) for i in os.listdir(folder) if i.endswith('.dat')]
+        if num_list:
+            return max(num_list)
+        else:
+            return 0
+            
+    folder, file_pre = os.path.split(self._basename)# basename = root/cooldown/data/ + file_pre (without '_%d.dat')
+    max_num = get_max_file_num(folder)
+
+    if max_num == 0:
+        head, tail = os.path.split(folder)# folder = root/cooldown/, tail = data/
+        head, tail = os.path.split(head)# head = root, tail = cooldown
+        cd_folders = [os.path.join(head,i,'data') for i in os.listdir(head) if i != tail]
+        for i in cd_folders:
+            max_num = max(max_num, get_max_file_num(i))
+    
+    # print time() - t0
+    return max_num + 1
+
+d.IncrementalGenerator._check_last_number = _check_last_number2
+
 class qtplot_client():
     '''A client for real-time plotting in qtplot'''
     def __init__(self,mute=False,mmap2npy=True,interval = 1):
