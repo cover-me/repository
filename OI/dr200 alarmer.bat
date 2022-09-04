@@ -1,1 +1,1 @@
-.\Python\python.exe ".\dr200 alarmer.py"
+.\Python27\python.exe ".\dr200 alarmer.py"
