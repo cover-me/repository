@@ -136,7 +136,7 @@ class easy_scan():
         else:
             print2('toWord: Can not find toWord.exe\n','red')
     def _create_data(self,
-                    xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan,bwd=False):
+                    xpnt,xchan,ypnt,ychan,zpnt,zchan,bwd=False):
         '''Generate the data file, spyview .meta file (only useful for spyview) and copy scan scripts.'''
         qt.Data.set_filename_generator(self._generator)
         data = qt.Data(name=self._filename)
@@ -144,8 +144,12 @@ class easy_scan():
         # set values are also called coordinates, read values are values
         self._coolabels = []
 
-        for i,j,k,n in zip(xpnt,xlbl,xchan,range(len(xchan))):
-            coolabel = '%s_(%s)'%(k,j)
+        for i,k,n in zip(xpnt,xchan,range(len(xchan))):
+            if k in channels_to_set:
+                label = channels_to_set[k][0]
+            else:
+                label = ''
+            coolabel = '%s_(%s)'%(k,label)
             self._coolabels.append(coolabel)
             # only the first set value is added as the coordinate
             # The size information is used when loading the data for qtplot or other programs
@@ -157,16 +161,24 @@ class easy_scan():
             else:
                 data.add_value(coolabel)
 
-        for i,j,k,n in zip(ypnt,ylbl,ychan,range(len(ychan))):
-            coolabel = '%s_(%s)'%(k,j)
+        for i,k,n in zip(ypnt,ychan,range(len(ychan))):
+            if k in channels_to_set:
+                label = channels_to_set[k][0]
+            else:
+                label = ''
+            coolabel = '%s_(%s)'%(k,label)
             self._coolabels.append(coolabel)
             if n==0:
                 data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
             else:
                 data.add_value(coolabel)
             
-        for i,j,k,n in zip(zpnt,zlbl,zchan,range(len(zchan))):     
-            coolabel = '%s_(%s)'%(k,j)
+        for i,k,n in zip(zpnt,zchan,range(len(zchan))):     
+            if k in channels_to_set:
+                label = channels_to_set[k][0]
+            else:
+                label = ''
+            coolabel = '%s_(%s)'%(k,label)
             self._coolabels.append(coolabel)
             if n==0:
                 data.add_coordinate(coolabel,size=len(i),start=i[0],end=i[-1])
@@ -194,13 +206,13 @@ class easy_scan():
         data._file.flush()
         return data
         
-    def _paraok_scan_shape(self,lbl,chan,pnt):
+    def _paraok_scan_shape(self,chan,pnt):
         '''Check the dimensions and lengths'''
-        return (1==len(np.shape(lbl))==len(np.shape(chan))==(len(np.shape(pnt))-1) and len(lbl)==len(chan)==len(pnt))
+        return (1==len(np.shape(chan))==(len(np.shape(pnt))-1) and len(chan)==len(pnt))
         
-    def _paraok_scan_range(self,lbl,chan,pnt):
+    def _paraok_scan_range(self,chan,pnt):
         '''Check if the set value in range'''
-        for i,j,k in zip(lbl,chan,pnt):
+        for j,k in zip(chan,pnt):
             vmin = np.min(k)
             vmax = np.max(k)
             for val in [vmin,vmax]:
@@ -211,48 +223,48 @@ class easy_scan():
                             return False
         return True
     
-    def _paraok_scan(self,xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt):
+    def _paraok_scan(self,xchan,xpnt,ychan,ypnt,zchan,zpnt):
         '''check whether parameters are OK for self._scan()'''
-        for lbl,chan,pnt in [[xlbl,xchan,xpnt],[ylbl,ychan,ypnt],[zlbl,zchan,zpnt]]:
-            if not self._paraok_scan_shape(lbl,chan,pnt):
+        for chan,pnt in [[xchan,xpnt],[ychan,ypnt],[zchan,zpnt]]:
+            if not self._paraok_scan_shape(chan,pnt):
                 print2('_scan(): Parameter shape error','red')
                 sys.exit()
-            if not self._paraok_scan_range(lbl,chan,pnt):
+            if not self._paraok_scan_range(chan,pnt):
                 print2('_scan(): Parameter range error','red')
                 sys.exit()            
 
-    def _paraokscan(self,xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend):
+    def _paraokscan(self,xchan,xstart,xend,ychan,ystart,yend,zchan,zstart,zend):
         '''check whether parameters are OK for self.scan()'''
         isok = True
         # check if all 0d or 1d
-        if not len(np.shape(xlbl))==len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
+        if not len(np.shape(xchan))==len(np.shape(xstart))== len(np.shape(xend))<2:
             isok = False
-        if not len(np.shape(ylbl))==len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
+        if not len(np.shape(ychan))==len(np.shape(ystart))== len(np.shape(yend))<2:
             isok = False
-        if not len(np.shape(zlbl))==len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
+        if not len(np.shape(zchan))==len(np.shape(zstart))== len(np.shape(zend))<2:
             isok = False
-        # check length if one dimensional
-        if len(np.shape(xlbl))==1 and not len(xlbl)==len(xchan)==len(xstart)==len(xend):
+        # check length if one dimensional (a vector scan)
+        if len(np.shape(xchan))==1 and not len(xchan)==len(xstart)==len(xend):
             isok = False
-        if len(np.shape(ylbl))==1 and not len(ylbl)==len(ychan)==len(ystart)==len(yend):
+        if len(np.shape(ychan))==1 and not len(ychan)==len(ystart)==len(yend):
             isok = False
-        if len(np.shape(zlbl))==1 and not len(zlbl)==len(zchan)==len(zstart)==len(zend):
+        if len(np.shape(zchan))==1 and not len(zchan)==len(zstart)==len(zend):
             isok = False
         if not isok:
             print2('scan(): Parameter error','red')
             sys.exit()
     def _scan(self,
-               xlbl=[''],xchan=['xchannel'],xpnt=[[0]],
-               ylbl=[''],ychan=['ychannel'],ypnt=[[0]],
-               zlbl=[''],zchan=['zchannel'],zpnt=[[0]],bwd=False):
-        self._paraok_scan(xlbl,xchan,xpnt,ylbl,ychan,ypnt,zlbl,zchan,zpnt)#check parameters
-        xlen = len(xlbl);ylen = len(ylbl);zlen = len(zlbl)
+               xchan=['xchannel'],xpnt=[[0]],
+               ychan=['ychannel'],ypnt=[[0]],
+               zchan=['zchannel'],zpnt=[[0]],bwd=False):
+        self._paraok_scan(xchan,xpnt,ychan,ypnt,zchan,zpnt)#check parameters
+        xlen = len(xchan);ylen = len(ychan);zlen = len(zchan)
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
         t_scanstart = time()
-        data = self._create_data(xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan)# create data file, spyview metafile, copy script
-        data_bwd = self._create_data(xpnt,xlbl,xchan,ypnt,ylbl,ychan,zpnt,zlbl,zchan,bwd) if bwd else None
+        data = self._create_data(xpnt,xchan,ypnt,ychan,zpnt,zchan)# create data file, spyview metafile, copy script
+        data_bwd = self._create_data(xpnt,xchan,ypnt,ychan,zpnt,zchan,bwd) if bwd else None
         data_loop = [data,data_bwd]
         counter = 0#counter for scan
         global STR_TIMEINFO
@@ -350,28 +362,28 @@ class easy_scan():
         d_item.new_block()
 
     def scan(self,
-               xlbl=[''],xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
-               ylbl=[''],ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
-               zlbl=[''],zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False):
+               xchan=['xchannel'],xstart=[0],xend=[0],xsteps=0,
+               ychan=['ychannel'],ystart=[0],yend=[0],ysteps=0,
+               zchan=['zchannel'],zstart=[0],zend=[0],zsteps=0,bwd=False):
         '''
         Each dimension can be a list of channels or a single channel, or empty.
         bwd: If True, there will be two data files. One for sweeping xchannels forward. The other one for sweeping xchannels backward.
         '''
         #check parameters
-        self._paraokscan(xlbl,xchan,xstart,xend,ylbl,ychan,ystart,yend,zlbl,zchan,zstart,zend)
-        if len(np.shape(xlbl))==0:# if zero dimensional
-            xlbl=[xlbl];xchan=[xchan];xstart=[xstart];xend=[xend]
-        if len(np.shape(ylbl))==0:
-            ylbl=[ylbl];ychan=[ychan];ystart=[ystart];yend=[yend]
-        if len(np.shape(zlbl))==0:
-            zlbl=[zlbl];zchan=[zchan];zstart=[zstart];zend=[zend]
+        self._paraokscan(xchan,xstart,xend,ychan,ystart,yend,zchan,zstart,zend)
+        if len(np.shape(xchan))==0:# if zero dimensional
+            xchan=[xchan];xstart=[xstart];xend=[xend]
+        if len(np.shape(ychan))==0:
+            ychan=[ychan];ystart=[ystart];yend=[yend]
+        if len(np.shape(zchan))==0:
+            zchan=[zchan];zstart=[zstart];zend=[zend]
 
         #send message to word
         print2('Scan.', 'cyan')
         print2(' Exit: ctrl+e. Pause: select any text. For channels without "maxstep", e.g. the field, press ctrl+c (IO errors may occur) then manually reset the target value.\n')
-        scanStr = "e.scan(%s,%s,%s,%s,%s, "%(xlbl,xchan,xstart,xend,xsteps) if xsteps or xlbl[0] else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(ylbl,ychan,ystart,yend,ysteps) if ysteps or ylbl[0] else ''
-        scanStr += "%s,%s,%s,%s,%s, "%(zlbl,zchan,zstart,zend,zsteps) if zsteps or zlbl[0] else ''
+        scanStr = "e.scan(%s,%s,%s,%s, "%(xchan,xstart,xend,xsteps) if xsteps or xchan[0]!='xchannel' else ''
+        scanStr += "%s,%s,%s,%s, "%(ychan,ystart,yend,ysteps) if ysteps or ychan[0]!='ychannel' else ''
+        scanStr += "%s,%s,%s,%s, "%(zchan,zstart,zend,zsteps) if zsteps or zchan[0]!='zchannel' else ''
         scanStr += "bwd=True, " if bwd else ''
         if scanStr[-2:] == ", ":#drop last ', ' away
             scanStr = scanStr[:-2]
@@ -394,9 +406,9 @@ class easy_scan():
         for i in np.arange(zchnum):
             zpnt[i] = np.linspace(zstart[i],zend[i],zsteps+1)
             
-        self._scan(xlbl,xchan,xpnt,
-               ylbl,ychan,ypnt,
-               zlbl,zchan,zpnt,bwd)
+        self._scan(xchan,xpnt,
+               ychan,ypnt,
+               zchan,zpnt,bwd)
         print
         winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
         
@@ -452,13 +464,13 @@ class get_set():
         self._prcss_labels = ['time']
         self._prcss_funs = []
         atomic_read = False
-
-        # channels_to_read: [('keithley1','readnextval','V'),('lockin1','X&Y','e-3V,exc0.1uA')]
+        
+        # Typical value: channels_to_read = [('smu1','vals',[['V','V'],['I','A']]), ('lockin1','R','V'),]
         # a channel is what qtlab calls a parameter
         for instr_name, para_name, label in channels_to_read:
             instr = qt.instruments.get(instr_name)
             
-            # check if the channel is availabel
+            # check if the channel is available
             if instr is None:
                 print2('Instrument %s not exists.'%instr_name,'red')
                 sys.exit()
@@ -470,12 +482,11 @@ class get_set():
                 else:
                     if 'flag' not in inspect.getargspec(p[para_name]['get_func']).args:
                         atomic_read = True
-            
-            # If the reading is a list (e.g., lockin X,Y,R,P).
-            if para_name in ['XY', 'RP', 'XYRP']:
-                self._query_list.append([instr,para_name,'%s_%s (%s)'%(instr_name,para_name[0],label)])
-                for i in list(para_name[1:]):
-                    self._query_list.append([None,None,'%s_%s (%s)'%(instr_name,i,label)])
+          
+            if type(label)==list:
+                self._query_list.append([instr,para_name,'%s_%s_%s (%s)'%(instr_name,para_name,label[0][0],label[0][1])])
+                for i in list(label[1:]):
+                    self._query_list.append([None,None,'%s_%s_%s (%s)'%(instr_name,para_name,i[0],i[1])])
             else:
                 self._query_list.append([instr,para_name,'%s (%s)'%(instr_name,label)])
 
@@ -626,12 +637,14 @@ class get_set():
             instr.set(para_name,sv)
 
     def get_setpoint(self,chan,val):
-        if self.is_dac_name(chan):
-            return [['ivvi',chan,val],]
-        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
-            return [[chan,'field',val],]
-        elif chan == 'Lakeshore':
-            return [[chan,'setpoint1',val],]
+        if chan not in channels_to_set:
+            return None
+        ch = channels_to_set[chan]
+        if type(ch)==list:
+            if len(ch)==3 and np.all([type(i)==str for i in ch]):
+                return [[ch[1],ch[2],val],]
+            elif callable(ch[1]):
+                return ch(val)
         return None
         
     def set_vals(self,chan_list,val_list):
@@ -689,6 +702,8 @@ def get_term_width():#get linewith of the console
     a, b = os.popen('mode con /status').read().split('\n')[4].strip().split(':')
     if a == 'Columns':
         return int(b)
+    elif a== '\xc1\xd0':
+        return int(b.split(' ')[-1])
 
 def print2(s,style='',hold=False):
     stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[1;34m','magenta':'\033[35m','cyan':'\033[1;36m','white':'\033[37m',
