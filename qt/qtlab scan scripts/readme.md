@@ -1,3 +1,7 @@
+This is the readme file for Qscan.230204.py (2023-02-04).
+
+For older Qscan scripts, see [readme_Qscan.211215.md](https://github.com/cover-me/repository/blob/master/qt/qtlab%20scan%20scripts/readme_Qscan.211215.md)
+
 # How does it work?
 
 With qtlab, we can get readings from and set parameters in instruments.
@@ -15,61 +19,70 @@ Demos are available [here](https://cover-me.github.io/2019/03/31/qtplot-demo.htm
 ```python
 # minimal working example.py
 
-execfile('Qscan.211215.py')
+execfile('Qscan.230204.py')
 this_file_path = sys._getframe().f_code.co_filename
 
 '''File path'''
-datapath=r'C:\qtlab\data\user1_pc1'+'\\%s'%strftime('%Y-%m')
-filename='datPC1%s'%strftime('%y%m')
+#   Put your data in [path]\cooldown_name\data, where [path] is C:\Users\majorana\Desktop\qtlab\data in this example.
+#   Put your logs and summaries in [path]\cooldown_name\log for easy access, or anywhere.
+#   Data files are named by [filename]_[counter].dat, where [filename] is 'datXL' (XL for fridge XL) in this example, and
+# [counter] is a number starts from 1, it accumulates even acrosss different cooldown folders if these 
+# folders are in the same [path]. So we can make each sure datafile has an unique name. 
+datapath=r'C:\Users\majorana\Desktop\qtlab\data\2023-02-04_fridge-XL_chip-123_cooldown1_Alice-Bob\data'
+filename='datXL'
 
 '''Other settings'''
-delay0,delay1,delay2 = (0,0.5,0.035)# Delays after setting Z (and Y0), Y (and X0), X. Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
-channels_to_read = [('keithley1','readnextval','e-3V'), ('lockin1', 'XY', 'e-3V,ac10nA')]# ('fridge', 'MC', 'K')
+# Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
+delay0,delay1,delay2 = (0,0.5,0.035)
+# [('smu1','vals',[['V','V'],['I','A']]), ('lockin1','XY',[['X','A,exc 10 mV'],['Y','A']]),]
+channels_to_read = [('smu1','vals',[['V','V'],['I','A']]), 
+                    ('lockin1','XY',[['X','A,exc 10 mV'],['Y','A']]),
+                    ]
+# {'vg':['V,smu1','smu1','source_v_level'], 'magnet_theta_deg':['D',magnet_theta_deg]}
+channels_to_set = {'vg':['V,smu1','smu1','source_v_level']}
 
 g = get_set()
 e = easy_scan()
 
 '''measure'''
-# labels, channels, start, end, number of steps ( = point number -1)
+# channels, start, end, number of steps ( = point number -1)
 
-# e.scan(['I2(e-2uA)'],['dac2'],[-300],[300],100)
-# e.set('dac2',0)
-e.scan(['Vg1_Vg2(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)
+e.scan(['vg'],[0],[3],100)# or e.scan('vg',0,3,100)
+e.set('vg',0)
+# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200)# scan a combination of channels
+# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200, 'magnet',0,1,50)# higher dimensional scans
 
 ```
+
+To do: explain the code above.
 
 # Special scans
 
-A linear scan is a scan whose set value changes linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2). Sometimes one needs to sweep a channel which is not defined in Qscan.py. We can of cause write a driver for vector magnets, or more simply, redefine the set function for e.scan() in the scan script (see the file "example_scan_210729.py").
+A linear scan is a scan whose set value changes linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2).
 
 ```python
-B_TOT = 1
 
-def get_setpoint2(self,chan,val):
+def magnet_theta_deg(val):
+    B_TOT = 1
 
-    if self.is_dac_name(chan):
-        return [['ivvi',chan,val],]
+    t_rad = val/180*np.pi
+    bx = B_TOT * np.cos(t_rad)
+    by = B_TOT * np.sin(t_rad)
         
-    elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
-        return [[chan,'field',val],]
-        
-    elif chan == 'magnet_theta_deg':
-        t_rad = val/180*np.pi
-        bx = B_TOT * np.cos(t_rad)
-        by = B_TOT * np.sin(t_rad)
-        
-        bx0, by0 = get_fields()
-        if vect_sum_valid(bx,by) and vect_sum_valid(bx0,by0):
-          if vect_sum_valid(bx,by0):
-            return [[magnetX,'field',bx],[magnetY,'field',by]]
-          else:# vect_sum_valid(bx0,by)
-            return [[magnetY,'field',by],[magnetX,'field',bx]]
-        else:
-          return None
+    bx0, by0 = get_fields()
+    if vect_sum_valid(bx,by) and vect_sum_valid(bx0,by0):
+      if vect_sum_valid(bx,by0):
+        return [[magnetX,'field',bx],[magnetY,'field',by]]
+      else:# vect_sum_valid(bx0,by)
+        return [[magnetY,'field',by],[magnetX,'field',bx]]
+    else:
+      return None
 
-    return None
-get_set.get_setpoint = get_setpoint2
+channels_to_set = {'vg':['V,smu1','smu1','source_v_level'], 
+                    'magnet_theta_deg':['D',magnet_theta_deg]}
 ```
+
+To do: explain how it works
 
 # Data processing during scan
 
@@ -119,7 +132,10 @@ g._prcss_labels.append('Isw(A)')
 g._prcss_funs.append({'function':get_isw,'arg':None})
 e = easy_scan()
 ```
-# Shifted field or dac
+
+Todo: check if this is still valid in the newest Qscan, and explain it
+
+# Shifted field or dac (to do: need update)
 
 ```python
 def by_shift(by):# shift By with a Bz-dependent value
