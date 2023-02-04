@@ -1,6 +1,6 @@
 This is the readme file for Qscan.230204.py (2023-02-04).
 
-For older Qscan scripts, see [readme_Qscan.211215.md](https://github.com/cover-me/repository/blob/master/qt/qtlab%20scan%20scripts/readme_Qscan.211215.md)
+For older Qscan scripts, see [readme_Qscan.211215.md](https://github.com/cover-me/repository/blob/master/qt/qtlab%20scan%20scripts/readme_Qscan.211215.md) (211215 has been updated to 220509)
 
 # How does it work?
 
