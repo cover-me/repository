@@ -7,7 +7,7 @@ import types
 import logging
 # import math
 
-class PTHe3_20230206(Instrument):
+class PTHe3_20230430(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -23,23 +23,24 @@ class PTHe3_20230206(Instrument):
         # self.add_parameter('state', type=types.StringType, flags=Instrument.FLAG_GET)
         self.add_parameter('state', type=types.StringType, flags=Instrument.FLAG_GET)
         self.add_parameter('he3pot', type=types.FloatType, flags=Instrument.FLAG_GET)
+        self.add_parameter('1kpot', type=types.FloatType, flags=Instrument.FLAG_GET)
+        self.add_parameter('sorb', type=types.FloatType, flags=Instrument.FLAG_GET)
         self.get_all()
-
-    def _execute(self, message):
-        self._visainstrument.write('%s\n' % (message))
         
     def _query(self, message):
-        return self._visainstrument.ask('%s\n'%message).split(':')[-1]
+        return self._visainstrument.ask(message).split(':')[-1]
 
     def get_all(self):
         self.get_ID()
         self.get_Address()
         self.get_state()
         self.get_he3pot()
+        self.get_1kpot()
+        self.get_sorb()
 
     # getting and setting functions
     def do_get_ID(self):# ID
-        ans = self._visainstrument.ask('*IDN?\n')
+        ans = self._visainstrument.ask('*IDN?')
         return ans[4:]
 
     def do_get_Address(self):# Address
@@ -51,10 +52,12 @@ class PTHe3_20230206(Instrument):
     def do_get_he3pot(self):# state
         ans = self._query('READ:DEV:HelioxX:HEL:SIG:TEMP')
         return float(ans[:-1])
-
-
-
-
-
-
-
+        
+    def do_get_1kpot(self):# state
+        ans = self._query('READ:DEV:DB6.T1:TEMP:SIG:TEMP')
+        return float(ans[:-1])
+        
+    def do_get_sorb(self):# state
+        ans = self._query('READ:DEV:MB1.T1:TEMP:SIG:TEMP')
+        return float(ans[:-1])
+    
