@@ -1,5 +1,3 @@
-Suggestions on new drivers:
-
 # Description
 
 This folder contains qtlab drivers. [Qtlab](https://github.com/heeres/qtlab) is a python based data-taking program.
