@@ -74,6 +74,7 @@ class Keithley2182_20230430(Instrument):
             
         }
         
+        # Add parameters
         self.add_parameter('Address', flags=Instrument.FLAG_GET, type=types.StringType)
         
         for i in self.dict_parameters:
