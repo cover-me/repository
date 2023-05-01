@@ -7,7 +7,7 @@ import types
 import logging
 # import math
 
-class PTHe3_20230501(Instrument):
+class PTHe3_20230502(Instrument):
 
     def __init__(self, name, address, term_chars = '\n'):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -36,19 +36,25 @@ class PTHe3_20230501(Instrument):
             {   
                 'get_cmd':'READ:DEV:HelioxX:HEL:SIG:TEMP',
                 'set_cmd':'',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET}
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
             },
             'onekpot': 
             {   
                 'get_cmd':'READ:DEV:DB6.T1:TEMP:SIG:TEMP',
                 'set_cmd':'',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET}
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
             },
             'sorb': 
             {   
                 'get_cmd':'READ:DEV:MB1.T1:TEMP:SIG:TEMP',
                 'set_cmd':'',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET}
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
+            },
+            'onekpot_pressure': 
+            {   
+                'get_cmd':'READ:DEV:DB3.P1:PRES:SIG:PRES',
+                'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'mB'}
             },
            
         }
@@ -98,6 +104,8 @@ class PTHe3_20230501(Instrument):
         ans = ans.split(':')[-1]
         if message == 'READ:DEV:HelioxX:HEL:SIG:STAT':
             return ans
+        elif message == 'READ:DEV:DB3.P1:PRES:SIG:PRES':
+            return ans[:-2]
         else:
             return ans[:-1]       
 
