@@ -177,6 +177,8 @@ optional keywords:
 
 # Suggestions
 
+- Make parameter-getting functions non-atomic. See section "Simple example".
+
 - Reduce IO operations. For example, for lockins, add parameters `XY` and `RT` besides `X`, `Y`, `R`, and `Theta`.
 
 - Make parameter-setting functions (`do_set_[parameter name]`) which may take a long time interruptible by a shortcut, such as ctrl+e (e for exit).
