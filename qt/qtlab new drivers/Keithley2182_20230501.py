@@ -7,7 +7,7 @@ import types
 import logging
 # import math
 
-class Keithley2182_20230430(Instrument):
+class Keithley2182_20230501(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -80,7 +80,7 @@ class Keithley2182_20230430(Instrument):
         for i in self.dict_parameters:
             cmd = self.dict_parameters[i]['get_cmd']
             if cmd:
-                func = lambda cmd=cmd: self._query(cmd)
+                func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
                 setattr(self, 'do_get_%s'%i, func)
             
             cmd = self.dict_parameters[i]['set_cmd']
@@ -95,8 +95,16 @@ class Keithley2182_20230430(Instrument):
     def _execute(self, message):
         return self._visainstrument.write(message)
         
-    def _query(self, message):
-        return self._visainstrument.ask(message)
+    def _query(self, message, flag=0):
+        '''
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        '''
+        if  flag != 2:
+            self._visainstrument.write(message)
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return ans
+        return None
 
     def get_all(self):
         self.get_Address()
