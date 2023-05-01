@@ -415,25 +415,13 @@ class easy_scan():
     def set(self,chan,val):
         print2('Set.', 'cyan')
         print2(' Exit: ctrl+e. Pause: select any text. For channels without "maxstep", e.g. the field, press ctrl+c (IO errors may occur) then manually reset the target value.\n')  
-        print2('Setting %s to %s...\n'%(chan, val))
-        scanStr = "e.set('%s',%s)"%(chan,val)
+        rate_str = g.get_rate(chan)
+        rate_str = ', rate %s'%rate_str if rate_str else ''
+        print2('Setting %s to %s%s...\n'%(chan, val, rate_str))
+        scanStr = "e.set('%s',%s)%s"%(chan,val,rate_str)
         user_interrrupt = False
         try:
-            if chan == 'ivvi':
-                dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
-                g.set_vals(dac_names,[val]*len(dac_names))
-            elif chan.endswith('_rate'):#ivvi_rate or dac*_rate
-                chan0 = chan[:-5]
-                delay = 30
-                scanStr += ', %s ms'%delay
-                if chan0 == 'ivvi':
-                    dac_names = [i for i in ivvi.get_parameter_names() if i.startswith('dac')]
-                    for i in dac_names:
-                        ivvi.set_parameter_rate(i,val,delay)
-                elif g.is_dac_name(chan0):
-                        ivvi.set_parameter_rate(chan0,val,delay)
-            else:
-                g.set_vals([chan],[val])      
+            g.set_vals([chan],[val])
         except KeyboardInterrupt:
             user_interrrupt = True
             print2('Interrupted by user\n','red')
@@ -568,7 +556,7 @@ class get_set():
     
     def do_set(self, setpoint_list):
         '''
-        Set a list of channels
+        Set a list of channels simultaneously, more efficient than setting one by one (can be further improved)
         input:
             setpoint_list: a list of setpoints. [[instr_name1, para_name1, sv1], ...]
         '''
@@ -582,6 +570,7 @@ class get_set():
             instr = qt.instruments.get(instr_name)
             para = instr.get_parameters()[para_name]
             
+            # check validation
             if not self.is_in_range(instr_name, para_name, sv):
                 print2('Value out of range: %s, %s, %s\n'%(instr_name, para_name, sv),'red')
                 sys.exit()
@@ -642,8 +631,10 @@ class get_set():
         ch = channels_to_set[chan]
         if type(ch)==list:
             if len(ch)==3 and np.all([type(i)==str for i in ch]):
+                # ch = [label, instrument, parameter]
                 return [[ch[1],ch[2],val],]
             elif callable(ch[1]):
+                # ch = [label, function]
                 return ch[1](val)
         return None
         
@@ -659,15 +650,19 @@ class get_set():
             self._check_last_pressed_key()
 
     def get_rate(self,chan):
-        '''get rates from an output channel, keep update with set_val!'''
-        if self.is_dac_name(chan):
-            _ = ivvi.get_parameters()[chan]
-            return '%s/%s'%(_['maxstep'],_['stepdelay'])
-        elif chan == 'magnet' or chan == 'magnetX' or chan == 'magnetY':
-            _ = qt.instruments.get(chan).get_rampRate()
-            return '%s'%_
+        if chan not in channels_to_set:
+            return ''
+        ch = channels_to_set[chan]
+        if type(ch)==list:
+            if len(ch)==3 and np.all([type(i)==str for i in ch]):
+                # ch = [label, instrument, parameter]
+                params = qt.instruments.get(ch[1]).get_parameters()
+                if 'rampRate' in params:
+                    return '%s'%qt.instruments.get(ch[1]).get('rampRate')
+                else:
+                    return '%s/%s'%(params[ch[2]]['maxstep'],params[ch[2]]['stepdelay'])
         return ''
-        
+
     ############## process data #####################
     def add_lockin_conductance(self,arg_dict):
         '''
