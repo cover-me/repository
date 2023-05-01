@@ -1,67 +1,73 @@
-This is the readme file for Qscan.230204.py (2023-02-04).
+# Description
 
-For older Qscan scripts, see [readme_Qscan.211215.md](https://github.com/cover-me/repository/blob/master/qt/qtlab%20scan%20scripts/readme_Qscan.211215.md) (211215 has been updated to 220509)
+This folder contains the enhancing script, Qscan.py, for [qtlab](https://github.com/heeres/qtlab). Qscan makes it easier and more efficient to do 1d/2d/3d scans, vector scans (scan multiple channels simultaneously), real-time visualization/operating data (with my forked version of qtplot), and automatically logging (in a WORD file, tips: switch to the web layout so there are no margins and page breaks, turn on the navigation pane). 3d scan is rarely used as it is time-consuming and can be replaced by a few 2d scans.
 
-# How does it work?
 
-With qtlab, we can get readings from and set parameters in instruments.
+# A simple example
 
-With qtplot, we can slice, visualize, and operate data.
-
-With MS Word, we are able to create measurement logs with text, figures, the web layout (without margins and page breaks), and a navigation panel.
-
-Qscan.py makes them work together, providing two major functions: `easy_scan.scan()` and `easy_scan.set()`, which are usually called in a form like `e.scan(['I2(e-2uA)'],['dac2'],[-100],[100],150,['Vg1(mV)','Vg2(mV)'],['dac11','dac12'],[0]*2,[100]*2,200)` (a 2D linear scan, note that two channels, 'dac11' and 'dac12', are able scanned together) and `e.set('magnet',0)`. Messages are sent to qtplot for visualizing and MS Word for logging.
-
-Demos are available [here](https://cover-me.github.io/2019/03/31/qtplot-demo.html), though they may be a little out of date.
-
-# Minimal working example
+filename: poscan.py
 
 ```python
-# minimal working example.py
-
-execfile('Qscan.230204.py')
+execfile('Qscan.230501b.py')
 this_file_path = sys._getframe().f_code.co_filename
 
 '''File path'''
-#   Put your data in [path]\cooldown_name\data, where [path] is C:\Users\majorana\Desktop\qtlab\data in this example.
-#   Put your logs and summaries in [path]\cooldown_name\log for easy access, or anywhere.
-#   Data files are named by [filename]_[counter].dat, where [filename] is 'datXL' (XL for fridge XL) in this example, and
-# [counter] is a number starts from 1, it accumulates even acrosss different cooldown folders if these 
-# folders are in the same [path]. So we can make each sure datafile has an unique name. 
-datapath=r'C:\Users\majorana\Desktop\qtlab\data\2023-02-04_fridge-XL_chip-123_cooldown1_Alice-Bob\data'
-filename='datXL'
+datapath=r'[data_folder]\[cooldown_info-fridge_info-sample_info]\data'
+filename='dat_[fridge_info]'
 
 '''Other settings'''
 # Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
-delay0,delay1,delay2 = (0,0.5,0.035)
-# [('smu1','vals',[['V','V'],['I','A']]), ('lockin1','XY',[['X','A,exc 10 mV'],['Y','A']]),]
+delay0,delay1,delay2 = (0,1,0.05)
+
+# (instrument_name, parameter_name, label or a list of [component_name, component_label])
 channels_to_read = [('smu1','vals',[['V','V'],['I','A']]), 
-                    ('lockin1','XY',[['X','A,exc 10 mV'],['Y','A']]),
+                    ('heliox','he3pot','sample (K)')
+                    # ('lockin1','XY',[['X','A'],['Y','A']]),
                     ]
-# {'vg':['V,smu1','smu1','source_v_level'], 'magnet_theta_deg':['D',magnet_theta_deg]}
-channels_to_set = {'vg':['V,smu1','smu1','source_v_level']}
+
+# channel_name:[label,instrument_name,parameter_name] or [label,function]}
+channels_to_set = {'vg':['V,smu1','smu1','source_v_level'], 
+                    # 'magnet_theta_deg':['Deg',magnet_theta_deg],
+                    'magnet':['T','magnet','field'],
+                    }
 
 g = get_set()
 e = easy_scan()
 
 '''measure'''
 # channels, start, end, number of steps ( = point number -1)
-
-e.scan(['vg'],[0],[3],100)# or e.scan('vg',0,3,100)
+e.scan(['vg'],[0],[3],100)# '[' and ']' can be dropped if not vector scan (a combination of channels)
 e.set('vg',0)
-# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200)# scan a combination of channels
-# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200, 'magnet',0,1,50)# higher dimensional scans
 
+# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200)# scan a combination of channels
+# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200, 'magnet',0,1,50)# higher-dimensional scan
+
+'''more scans'''
+# Excute file "poscan_more.py" if exist, then delete it.
+e.more_scan('poscan_more.py')
 ```
 
-To do: explain the code above.
+- Files generated
+
+The final file name would be `filename_[index]`, where `[index]` starts from 1 and is unique as long as `[data_folder]` does not change.
+
+DAT, SET, PY files would be generated in `datapath`, which are the data file, the instrument snapshot, a copy of the scan script file, respectively. Qscan file will also be copied if not copied yet.
+
+- value labels
+
+Getting paramters: `[instrument_name] (label)` or `[instrument_name]_[parameter_name]_[component_name] (component_label)` (I would like to make it `[instrument_name]_[component_name] (component_label)`...)
+
+Setting parameters: `channel_name_(label)`
 
 # Special scans
 
 A linear scan is a scan whose set value changes linearly. Sometimes one needs to perform a non-linear scan, for example, a vector combination of magnetic fields Bx and By with fixed Btot = sqrt(Bx^2+By^2).
 
 ```python
+# def vect_sum_valid(bx,by):  
+# def get_fields():
 
+# Return: a list of [channel,parameter,setting_value]
 def magnet_theta_deg(val):
     B_TOT = 1
 
@@ -72,17 +78,14 @@ def magnet_theta_deg(val):
     bx0, by0 = get_fields()
     if vect_sum_valid(bx,by) and vect_sum_valid(bx0,by0):
       if vect_sum_valid(bx,by0):
-        return [[magnetX,'field',bx],[magnetY,'field',by]]
+        return [['magnetX','field',bx],['magnetY','field',by]]
       else:# vect_sum_valid(bx0,by)
-        return [[magnetY,'field',by],[magnetX,'field',bx]]
+        return [['magnetY','field',by],['magnetX','field',bx]]
     else:
       return None
 
-channels_to_set = {'vg':['V,smu1','smu1','source_v_level'], 
-                    'magnet_theta_deg':['D',magnet_theta_deg]}
+channels_to_set = {'magnet_theta_deg':['D',magnet_theta_deg]}
 ```
-
-To do: explain how it works
 
 # Data processing during scan
 
@@ -187,6 +190,9 @@ e = easy_scan()
 # qt.instruments.get('magnetY')._ins.MARGIN=1e-3
 ```
 
+# Further reading
+
+Demos are available [here](https://cover-me.github.io/2019/03/31/qtplot-demo.html), may be a little out of date.
 
 # Main changes:
 - 18.06.17 add scan delay/rates/elapsed/filename to .doc notes
@@ -200,3 +206,4 @@ e = easy_scan()
 - 21.10.17 When setting x channels, wait once instead of x times. Add functions for data labels.
 - 21.12.08 Remove "ctrl+n", improve "ctrl+e"
 - 21.12.15 clean up
+- 23.05.02 update get_rate
