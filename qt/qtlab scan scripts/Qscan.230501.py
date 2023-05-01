@@ -644,7 +644,7 @@ class get_set():
             if len(ch)==3 and np.all([type(i)==str for i in ch]):
                 return [[ch[1],ch[2],val],]
             elif callable(ch[1]):
-                return ch(val)
+                return ch[1](val)
         return None
         
     def set_vals(self,chan_list,val_list):
