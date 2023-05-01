@@ -15,6 +15,8 @@ class Keithley2182_20230501(Instrument):
         self._address = address
         self._visainstrument = visa.instrument(self._address)
         self._visainstrument.clear()
+        
+        self.attribute_parameters = ['_address', '__module__']
 
         self.dict_parameters = { 
             'ID':
@@ -75,7 +77,11 @@ class Keithley2182_20230501(Instrument):
         }
         
         # Add parameters
-        self.add_parameter('Address', flags=Instrument.FLAG_GET, type=types.StringType)
+        for i in self.attribute_parameters:
+            para_name = i.strip('_').upper()
+            func = lambda attr_name=i: getattr(self,attr_name) 
+            setattr(self, 'do_get_%s'%para_name, func)
+            self.add_parameter(para_name, flags=Instrument.FLAG_GET, type=types.StringType)
         
         for i in self.dict_parameters:
             cmd = self.dict_parameters[i]['get_cmd']
@@ -92,6 +98,9 @@ class Keithley2182_20230501(Instrument):
 
         self.get_all()
 
+    def close_session(self):
+        self._visainstrument.close() 
+        
     def _execute(self, message):
         return self._visainstrument.write(message)
         
@@ -107,10 +116,8 @@ class Keithley2182_20230501(Instrument):
         return None
 
     def get_all(self):
-        self.get_Address()
+        for i in self.attribute_parameters:
+            para_name = i.strip('_').upper()
+            self.get(para_name)
         for i in self.dict_parameters:
             self.get(i)
-        
-
-    def do_get_Address(self):
-        return self._address
