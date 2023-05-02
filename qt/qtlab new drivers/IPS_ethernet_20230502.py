@@ -1,13 +1,14 @@
 from instrument import Instrument
-from time import time, sleep
+from time import sleep
 import socket
+import msvcrt
 import visa
 import types
 import logging
-import math
+# import math
 
-class IPS_ethernet_20230501(Instrument):
-    MARGIN = 0.0001
+class IPS_ethernet_20230502(Instrument):
+    MARGIN = 0.0002
     # PT1 8.3625 A/T,14 T
     MAX_FIELD = 14
     AtoB = 8.3625
@@ -21,7 +22,7 @@ class IPS_ethernet_20230501(Instrument):
         self._visainstrument = visa.instrument(self._address, term_chars = term_chars)
         self._visainstrument.clear()
 
-        self.dict_parameters = { 
+        self.dict_parameters = {
             'ID':
             {
                 'get_cmd':'*IDN?',
@@ -95,9 +96,23 @@ class IPS_ethernet_20230501(Instrument):
         self._execute('SET:DEV:GRPZ:PSU:SIG:FSET:%s'%val)
         self.set_action('RTOS')# system would reset to "HOLD" once field reached
         if wait:
-            while math.fabs(val - self.get('field')) > self.MARGIN:
-                sleep(0.050)
-
+            try:
+                while abs(val - self.get_field()) > self.MARGIN or self.get_action() != 'HOLD':
+                    self._do_emit_changed()# update the GUI
+                    self._check_last_pressed_key()
+                    sleep(0.050)
+            except KeyboardInterrupt:
+                self.set_action('HOLD')
+                raise KeyboardInterrupt
         return True
+        
+    def _check_last_pressed_key(self):
+        last_key = ''
+        while msvcrt.kbhit():
+           last_key = msvcrt.getch()
+        if last_key == '\x05':#ctrl+e(xit)
+            raise KeyboardInterrupt
+            
+ 
         
 
