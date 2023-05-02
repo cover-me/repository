@@ -7,7 +7,7 @@ import types
 import logging
 # import math
 
-class Keithley2400_20230501(Instrument):
+class Keithley2400_20230502(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -82,7 +82,7 @@ class Keithley2400_20230501(Instrument):
             },
             'vals': 
             {   
-                'get_cmd':'read?',
+                'get_cmd':'READ?',
                 'set_cmd':'',
                 'kw':{'type':types.ListType,'flags':Instrument.FLAG_GET}
             },
@@ -109,6 +109,8 @@ class Keithley2400_20230501(Instrument):
 
             self.add_parameter(i, **self.dict_parameters[i]['kw'])
 
+        ID = self.get_ID()
+        self.is_2450 = 'MODEL 2450' in ID
         self.get_all()
 
     def close_session(self):
@@ -129,10 +131,13 @@ class Keithley2400_20230501(Instrument):
         return None
             
     def _parse(self, ans, message):
-        if message == 'read?':
-            ans = ans.split(',')
-            volt, curr, res, ts, status = [float(i) for i in ans]
-            return [volt, curr]
+        if message == 'READ?':
+            if self.is_2450:
+                return float(ans)
+            else:
+                ans = ans.split(',')
+                volt, curr, res, ts, status = [float(i) for i in ans]
+                return [volt, curr]
         elif message == 'NPLC?':
             return float(ans)
         return ans    
@@ -192,11 +197,3 @@ class Keithley2400_20230501(Instrument):
             self._execute(':SENS:%s:RANG %s'%(d2[stype],x))
         else:
             print 'Unknown source type!'
-        
-
-
-
-
-
-
-
