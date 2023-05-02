@@ -1,14 +1,14 @@
 # https://github.com/cover-me/repository/tree/master/qt/qtlab%20new%20drivers
 
 from instrument import Instrument
-# from time import time, sleep
+from time import sleep
 import visa
 import types
+import msvcrt
 import logging
-# import math
 
-class PTHe3_20230502(Instrument):
-
+class PTHe3_20230503(Instrument):
+    MARGIN = 1e-3
     def __init__(self, name, address, term_chars = '\n'):
         logging.debug(__name__ + ' : Initializing instrument')
         Instrument.__init__(self, name, tags=['physical'])
@@ -36,7 +36,19 @@ class PTHe3_20230502(Instrument):
             {   
                 'get_cmd':'READ:DEV:HelioxX:HEL:SIG:TEMP',
                 'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'K', 'maxval':300, 'minval':0}
+            },              
+            'he3pot_setpoint': 
+            {   
+                'get_cmd':'READ:DEV:HelioxX:HEL:SIG:TSET',
+                'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
+            },            
+            'he3pot_stable': 
+            {   
+                'get_cmd':'READ:DEV:HelioxX:HEL:SIG:H3PS',
+                'set_cmd':'',
+                'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
             'onekpot': 
             {   
@@ -102,12 +114,12 @@ class PTHe3_20230502(Instrument):
         if message == '*IDN?':
             return ans[4:]
         ans = ans.split(':')[-1]
-        if message == 'READ:DEV:HelioxX:HEL:SIG:STAT':
+        if message in ['READ:DEV:HelioxX:HEL:SIG:STAT','READ:DEV:HelioxX:HEL:SIG:H3PS']:
             return ans
         elif message == 'READ:DEV:DB3.P1:PRES:SIG:PRES':
             return ans[:-2]
         else:
-            return ans[:-1]       
+            return ans[:-1]
 
     def get_all(self):
         for i in self.attribute_parameters:
@@ -115,3 +127,25 @@ class PTHe3_20230502(Instrument):
             self.get(para_name)
         for i in self.dict_parameters:
             self.get(i)
+
+    def do_set_he3pot(self,val,wait=True):
+        self._execute('SET:DEV:HelioxX:HEL:TSET:%s'%val)
+        if wait:
+            try:
+                while abs(val - self.get_he3pot()) > self.MARGIN or self.get_he3pot_stable() != 'Stable':
+                    self.get_he3pot_setpoint()
+                    self._do_emit_changed()# update the GUI
+                    self._check_last_pressed_key()
+                    sleep(0.050)
+            except KeyboardInterrupt:
+                # val = self.get_he3pot()
+                # self._execute('SET:DEV:HelioxX:HEL:TSET:%s'%val)
+                raise KeyboardInterrupt
+        return True
+        
+    def _check_last_pressed_key(self):
+        last_key = ''
+        while msvcrt.kbhit():
+           last_key = msvcrt.getch()
+        if last_key == '\x05':#ctrl+e(xit)
+            raise KeyboardInterrupt
