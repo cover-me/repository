@@ -660,7 +660,9 @@ class get_set():
                 if 'rampRate' in params:
                     return '%s'%qt.instruments.get(ch[1]).get('rampRate')
                 else:
-                    return '%s/%s'%(params[ch[2]]['maxstep'],params[ch[2]]['stepdelay'])
+                    maxstep = params[ch[2]]['maxstep'] if 'maxstep' in params[ch[2]] else ''
+                    stepdelay = params[ch[2]]['stepdelay'] if 'stepdelay' in params[ch[2]] else ''
+                    return '%s/%s'%(maxstep,stepdelay)
         return ''
 
     ############## process data #####################
