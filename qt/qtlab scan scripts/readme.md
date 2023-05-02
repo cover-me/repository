@@ -1,3 +1,10 @@
+![qtlab_command_line](https://user-images.githubusercontent.com/22870592/235606148-5f30f130-b4f6-4802-8228-02f1a930a5f0.gif)
+
+![qtlab_qtplot](https://user-images.githubusercontent.com/22870592/235606186-f9a945ef-ecbe-4225-a2a3-9f1470c335ca.gif)
+
+![qtlab_gui](https://user-images.githubusercontent.com/22870592/235606212-5d37d212-45d6-4e17-a551-1975ef917481.gif)
+
+
 # Description
 
 This folder contains the enhancing script, Qscan.py, for [qtlab](https://github.com/heeres/qtlab). Qscan makes it easier and more efficient to do 1d/2d/3d scans, vector scans (scan multiple channels simultaneously), real-time visualization/operating data (with my forked version of qtplot), and automatically logging (in a WORD file, tips: switch to the web layout so there are no margins and page breaks, turn on the navigation pane). 3d scan is rarely used as it is time-consuming and can be replaced by a few 2d scans.
