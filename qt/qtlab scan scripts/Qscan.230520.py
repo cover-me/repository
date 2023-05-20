@@ -262,6 +262,7 @@ class easy_scan():
         xptlen = len(xpnt[0]);yptlen = len(ypnt[0]);zptlen = len(zpnt[0])
         #start
         qt.mstart()
+        g.t0 = time()
         t_scanstart = time()
         data = self._create_data(xpnt,xchan,ypnt,ychan,zpnt,zchan)# create data file, spyview metafile, copy script
         data_bwd = self._create_data(xpnt,xchan,ypnt,ychan,zpnt,zchan,bwd) if bwd else None
@@ -449,16 +450,13 @@ class get_set():
     def __init__(self):
         self.t0  = time()
         self._query_list = []
-        self._prcss_labels = ['time']
-        self._prcss_funs = []
+        self.prcss_labels = ['t (s)']
         atomic_read = False
-        
-        # Typical value: channels_to_read = [('smu1','vals',[['V','V'],['I','A']]), ('lockin1','R','V'),]
-        # a channel is what qtlab calls a parameter
+
+        # Typical value: channels_to_read = [('smu1','val','Ileak(A)'), ('lockin1','XY',['Vxx_X(V)','Vxx_Y(V)']),]
         for instr_name, para_name, label in channels_to_read:
             instr = qt.instruments.get(instr_name)
-            
-            # check if the channel is available
+
             if instr is None:
                 print2('Instrument %s not exists.'%instr_name,'red')
                 sys.exit()
@@ -469,14 +467,15 @@ class get_set():
                     sys.exit()                    
                 else:
                     if 'flag' not in inspect.getargspec(p[para_name]['get_func']).args:
+                        # 'flag' is to support non-atomic reading (better than atomic reading)
                         atomic_read = True
           
             if type(label)==list:
-                self._query_list.append([instr,para_name,'%s_%s_%s (%s)'%(instr_name,para_name,label[0][0],label[0][1])])
+                self._query_list.append([instr,para_name,label[0]])
                 for i in list(label[1:]):
-                    self._query_list.append([None,None,'%s_%s_%s (%s)'%(instr_name,para_name,i[0],i[1])])
+                    self._query_list.append([None,None,i])
             else:
-                self._query_list.append([instr,para_name,'%s (%s)'%(instr_name,label)])
+                self._query_list.append([instr,para_name,label])
 
             # Clear GPIB, usb buffer, get_all
             print2('Clear buffers\n','cyan')
@@ -509,6 +508,9 @@ class get_set():
             raise KeyboardInterrupt
 
     def take_data_atomic(self):
+        '''
+        Take data atomically
+        '''
         val = []
         for instr, para_name, label in self._query_list:
             if instr is not None:
@@ -521,6 +523,9 @@ class get_set():
         return val
     
     def take_data(self):
+        '''
+        Take data non-atomically
+        '''
         # flag 0 (default): write command and read respond, 1: write only, 2: read only
         val = []
         for instr, para_name, label in self._query_list:
@@ -538,7 +543,7 @@ class get_set():
         return val       
 
     def get_vallabels(self):
-        return [i[2] for i in self._query_list] + self._prcss_labels
+        return [i[2] for i in self._query_list] + self.prcss_labels
 
     def is_dac_name(self,dn):#'dn': dac name
         return len(dn)<6 and dn[0:3]=='dac' and dn[3:5].isdigit() and int(dn[3:5])<=16
@@ -552,7 +557,6 @@ class get_set():
             if 'maxval' in para and sv > para['maxval']:
                 return False
         return True
-        
     
     def do_set(self, setpoint_list):
         '''
@@ -657,42 +661,16 @@ class get_set():
             if len(ch)==3 and np.all([type(i)==str for i in ch]):
                 # ch = [label, instrument, parameter]
                 params = qt.instruments.get(ch[1]).get_parameters()
-                if 'rampRate' in params:
-                    return '%s'%qt.instruments.get(ch[1]).get('rampRate')
+                if '%s_rate'%ch[2] in params:
+                    return '%s'%qt.instruments.get(ch[1]).get('%s_rate'%ch[2])
                 else:
                     maxstep = params[ch[2]]['maxstep'] if 'maxstep' in params[ch[2]] else ''
                     stepdelay = params[ch[2]]['stepdelay'] if 'stepdelay' in params[ch[2]] else ''
                     return '%s/%s'%(maxstep,stepdelay)
         return ''
-
-    ############## process data #####################
-    def add_lockin_conductance(self,arg_dict):
-        '''
-        Not very useful
-        lockin_osc: lockin osc out * 0.01
-        Vrange: ivvi output voltage range in V/V, usually 0.01
-        Igain: 1.e6
-        '''
-        names = ['index','label','Rin','lockin_osc','Vrange','Igain']
-        if len(arg_dict) != len(names) or (not all([(i in arg_dict) for i in names])):
-            print2('Failed to add lockin_conductance!\n','red')
-            return
-        self._prcss_labels.append(arg_dict['label'])
-        self._prcss_funs.append({'function':self.get_lockin_conductance,'arg':arg_dict})
-    def get_lockin_conductance(self,arg_dict,val):
-        '''
-        Not very useful
-        '''
-        ac_excitation = arg_dict['lockin_osc'] * arg_dict['Vrange']
-        ac_current = val[arg_dict['index']]/arg_dict['Igain']
-        sigma = ac_current/ac_excitation
-        r0 = 12906
-        return r0*sigma/(1.-arg_dict['Rin']*sigma)
     
     def get_prcss(self,val):
         p_val = [time()-self.t0]
-        for i in self._prcss_funs:
-            p_val.append(i['function'](i['arg'],val))
         return p_val
 
 def get_term_width():#get linewith of the console
@@ -722,4 +700,3 @@ LOGO = '''
 '''%(tuple([' '*(TERM_WIDTH/2-17)]*4))
 print2(LOGO)
 ivvi = qt.instruments.get('ivvi')
-delay0  = 0
