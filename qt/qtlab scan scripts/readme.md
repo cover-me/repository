@@ -15,31 +15,34 @@ This folder contains the enhancing script, Qscan.py, for [qtlab](https://github.
 filename: poscan.py
 
 ```python
-execfile('Qscan.230501b.py')
+execfile('Qscan.230520.py')
 this_file_path = sys._getframe().f_code.co_filename
 
 '''File path'''
+# Data in path\cooldown_name\data, logs and summaries in path\cooldown_name\
 datapath=r'[data_folder]\[cooldown_info-fridge_info-sample_info]\data'
-filename='dat_[fridge_info]'
+filename='dat_[fridge_info]_[cooldown_info]'
+
+channels_to_read = [# (instrument,parameter,label or list of labels)
+                    ('smu1','val','I_leak (A)'), 
+                    # ('smu2','val','R (ohm)'), 
+                    ('lockin1','XY',['Vac_x (V)', 'Vac_y (V)']),
+                    ('ppms','temp','T (K)'),
+                    ]
+
+channels_to_set = {# name: [unit,instrument,parameter] or [unit, function]
+                    'vg':['V','smu1','source_level'],
+                    'T':['K','ppms','temp'],
+                    'B':['T','ppms','field'],
+                     # 'magnet_theta_deg':['Deg',magnet_theta_deg],
+                  }
+
+g = get_set()
+e = easy_scan()
 
 '''Other settings'''
 # Lockin:(0,10*tau,1.5tau-10tau) DC:(0,1,0.1)
 delay0,delay1,delay2 = (0,1,0.05)
-
-# (instrument_name, parameter_name, label or a list of [component_name, component_label])
-channels_to_read = [('smu1','vals',[['V','V'],['I','A']]), 
-                    ('heliox','he3pot','sample (K)')
-                    # ('lockin1','XY',[['X','A'],['Y','A']]),
-                    ]
-
-# channel_name:[label,instrument_name,parameter_name] or [label,function]}
-channels_to_set = {'vg':['V,smu1','smu1','source_v_level'], 
-                    # 'magnet_theta_deg':['Deg',magnet_theta_deg],
-                    'magnet':['T','magnet','field'],
-                    }
-
-g = get_set()
-e = easy_scan()
 
 '''measure'''
 # channels, start, end, number of steps ( = point number -1)
@@ -47,7 +50,7 @@ e.scan(['vg'],[0],[3],100)# '[' and ']' can be dropped if not vector scan (a com
 e.set('vg',0)
 
 # e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200)# scan a combination of channels
-# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200, 'magnet',0,1,50)# higher-dimensional scan
+# e.scan(['Vg1','Vg2'],[0]*2,[100]*2,200, 'B',0,1,50)# higher-dimensional scan
 
 '''more scans'''
 # Excute file "poscan_more.py" if exist, then delete it.
