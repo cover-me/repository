@@ -7,13 +7,13 @@ import types
 import msvcrt
 import logging
 
-class PPMS_20230515(Instrument):
-    MARGIN_B = 1e-4# T
-    MARGIN_T = 1e-3# K
+class PPMS_20230523(Instrument):
     TIME_SLEEP = 0.05# s
     # We have to emulate field rate and temperature rate, becasue they can not be read from PPMS!
     RATE_B = 0.3# T/min
     RATE_T = 10# K/min
+    MARGIN_B = 1e-3# T
+    MARGIN_T = 5e-3# K
 
     def __init__(self, name, address, term_chars = '\n'):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -27,7 +27,9 @@ class PPMS_20230515(Instrument):
         self._initialize_parameters()
         # We have to emulate field rate and temperature rate, becasue they can not be read from PPMS!
         self.set_field_rate(self.RATE_B)
-        self.set_temp_rate(self.RATE_T)
+        self.set_temperature_rate(self.RATE_T)
+        self.set_margin_field(self.MARGIN_B)
+        self.set_margin_temperature(self.MARGIN_T)
         
         self.get_all()
         
@@ -44,13 +46,25 @@ class PPMS_20230515(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
-            'temp': 
+            'margin_field':
+            {
+                'get_cmd':'',
+                'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T'}
+            },
+            'margin_temperature':
+            {
+                'get_cmd':'',
+                'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'K'}
+            },
+            'temperature': 
             {   
                 'get_cmd':'TEMP?',
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'K', 'maxval':400, 'minval':1.6}
             },              
-            'temp_rate': 
+            'temperature_rate': 
             {   
                 'get_cmd':'',
                 'set_cmd':'',
@@ -81,17 +95,17 @@ class PPMS_20230515(Instrument):
         elif message=='FELD?':
             return float(ans[2])/1.e4# convert Oe to T
             
-    def do_set_temp(self, val, wait=True, approach=0):
+    def do_set_temperature(self, val, wait=True, approach=0):
         '''
         Set the temperature (K)
         Approach: Fast, No Overshoot
         '''
-        rate = self.get_temp_rate()
+        rate = self.get_temperature_rate()
         self._execute('TEMP %s, %s, %i'%(val, rate, approach))
 
         if wait:
             try:
-                while abs(val - self.get_temp()) > self.MARGIN_T:
+                while abs(val - self.get_temperature()) > self.margin_temperature:
                     self._do_emit_changed()# update the GUI for temperature value
                     self._check_last_pressed_key()
                     sleep(self.TIME_SLEEP)
@@ -111,7 +125,7 @@ class PPMS_20230515(Instrument):
         
         if wait:
             try:
-                while abs(b_tesla - self.get_field()) > self.MARGIN_B:
+                while abs(b_tesla - self.get_field()) > self.margin_field:
                     self._do_emit_changed()# update the GUI for field value
                     self._check_last_pressed_key()
                     sleep(self.TIME_SLEEP)
@@ -120,11 +134,11 @@ class PPMS_20230515(Instrument):
         return True
 
     # We have to emulate field rate and temperature rate, becasue they can not be read from PPMS! 
-    def do_set_temp_rate(self, r):# temp_rate
+    def do_set_temperature_rate(self, r):# temperature_rate
         pass
         
-    def do_get_temp_rate(self):# temp_rate
-        return self.get_parameters()['temp_rate']['value']
+    def do_get_temperature_rate(self):# temperature_rate
+        return self.get_parameters()['temperature_rate']['value']
         
     def do_set_field_rate(self, r):# field_rate
         pass
@@ -132,8 +146,18 @@ class PPMS_20230515(Instrument):
     def do_get_field_rate(self):# field_rate
         return self.get_parameters()['field_rate']['value']
         
+    def do_set_margin_field(self, x):
+        self.margin_field = x
         
-                 
+    def do_get_margin_field(self):
+        return self.margin_field
+        
+    def do_set_margin_temperature(self, x):
+        self.margin_temperature = x
+        
+    def do_get_margin_temperature(self):
+        return self.margin_temperature
+        
     def get_all(self):
         for i in self.attribute_parameters:
             para_name = i.strip('_').upper()
