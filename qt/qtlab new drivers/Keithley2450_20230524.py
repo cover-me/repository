@@ -5,7 +5,7 @@ import visa
 import types
 import logging
 
-class Keithley2450_20230516(Instrument):
+class Keithley2450_20230524(Instrument):
 
     def __init__(self, name, address):
         logging.info(__name__ + ' : Initializing instrument')
@@ -108,6 +108,18 @@ class Keithley2450_20230516(Instrument):
                 'set_cmd':'SOUR:VOLT:DEL:AUTO %s',
                 'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
             },
+            'switch_source_autorange_i': 
+            {   
+                'get_cmd':'SOUR:CURR:RANG:AUTO?',
+                'set_cmd':'SOUR:CURR:RANG:AUTO %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+            },
+            'switch_source_autorange_v': 
+            {   
+                'get_cmd':'SOUR:VOLT:RANG:AUTO?',
+                'set_cmd':'SOUR:VOLT:RANG:AUTO %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+            },
             'switch_source_readback_i': 
             {   
                 'get_cmd':'SOUR:CURR:READ:BACK?',
@@ -159,6 +171,18 @@ class Keithley2450_20230516(Instrument):
             {   
                 'get_cmd':'SENS:VOLT:AZER?',
                 'set_cmd':'SENS:VOLT:AZER %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+            },
+            'switch_sense_autorange_i': 
+            {   
+                'get_cmd':'SENS:CURR:RANG:AUTO?',
+                'set_cmd':'SENS:CURR:RANG:AUTO %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+            },
+            'switch_sense_autorange_v': 
+            {   
+                'get_cmd':'SENS:VOLT:RANG:AUTO?',
+                'set_cmd':'SENS:VOLT:RANG:AUTO %s',
                 'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
             },
             'switch_aver_filter_i': 
@@ -280,3 +304,4 @@ class Keithley2450_20230516(Instrument):
             ans = self._visainstrument.read()
             return self._parse(ans,message)
         return None
+
