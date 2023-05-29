@@ -7,11 +7,12 @@ import types
 import msvcrt
 import logging
 
-class PTHe3_20230503(Instrument):
+class PTHe3_20230529(Instrument):
     MARGIN = 1e-3
     def __init__(self, name, address, term_chars = '\n'):
         logging.debug(__name__ + ' : Initializing instrument')
         Instrument.__init__(self, name, tags=['physical'])
+        print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
         self._visainstrument = visa.instrument(self._address, term_chars = term_chars)
