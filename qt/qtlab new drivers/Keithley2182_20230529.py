@@ -7,7 +7,7 @@ import types
 import logging
 # import math
 
-class Keithley2182_20230501(Instrument):
+class Keithley2182_20230529(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
