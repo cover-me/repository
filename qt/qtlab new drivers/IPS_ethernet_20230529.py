@@ -7,16 +7,17 @@ import types
 import logging
 # import math
 
-class IPS_ethernet_20230502(Instrument):
-    MARGIN = 0.0002
+class IPS_ethernet_20230529(Instrument):
+    MARGIN = 1e-3# T
     # PT1 8.3625 A/T,14 T
     MAX_FIELD = 14
     AtoB = 8.3625
-    MAX_RATE = 0.15
+    MAX_RATE = 0.2
 
     def __init__(self, name, address, term_chars = '\n'):
         logging.debug(__name__ + ' : Initializing instrument')
         Instrument.__init__(self, name, tags=['physical'])
+        print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
         self._visainstrument = visa.instrument(self._address, term_chars = term_chars)
@@ -28,6 +29,18 @@ class IPS_ethernet_20230502(Instrument):
                 'get_cmd':'*IDN?',
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
+            },
+            'margin':
+            {
+                'get_cmd':'',
+                'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T'}
+            },
+            'temperature': 
+            {   
+                'get_cmd':'READ:DEV:MB1.T1:TEMP:SIG:TEMP',
+                'set_cmd':'',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
             },
             'field': 
             {   
@@ -56,7 +69,7 @@ class IPS_ethernet_20230502(Instrument):
         for i in self.dict_parameters:
             cmd = self.dict_parameters[i]['get_cmd']
             if cmd:
-                func = lambda cmd=cmd: self._query(cmd)
+                func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
                 setattr(self, 'do_get_%s'%i, func)
             
             cmd = self.dict_parameters[i]['set_cmd']
@@ -66,7 +79,9 @@ class IPS_ethernet_20230502(Instrument):
 
             self.add_parameter(i, **self.dict_parameters[i]['kw'])
 
+        self.set_margin(self.MARGIN)
         self.get_all()
+        
         
     def close_session(self):
         self._visainstrument.close()
@@ -77,16 +92,29 @@ class IPS_ethernet_20230502(Instrument):
     def _execute(self, message):
         return self._visainstrument.ask(message)
         
-    def _query(self, message):
-        ans = self._visainstrument.ask(message)
+    def _parse(self, ans, message):
         ans = ans.split(':')[-1]
         if message == 'READ:DEV:GRPZ:PSU:SIG:FLD':
             return ans[:-1] if ans.endswith('T') else None
         elif message == 'READ:DEV:GRPZ:PSU:SIG:RFST':
             return ans[:-3] if ans.endswith('T/m') else None
+        elif message == 'READ:DEV:MB1.T1:TEMP:SIG:TEMP':
+            return ans[:-1]
         else:
             return ans
 
+    def _query(self, message, flag=0):
+        '''
+        flag, 0 (default): write command and read respond, 1: write only, 2: read only
+        The reading can be non-atomic with the parameter flag
+        '''
+        if  flag != 2:
+            self._visainstrument.write(message)
+        if flag != 1:
+            ans = self._visainstrument.read()
+            return self._parse(ans,message)
+        return None
+        
     def get_all(self):
         self.get_Address()
         for i in self.dict_parameters:
@@ -105,6 +133,12 @@ class IPS_ethernet_20230502(Instrument):
                 self.set_action('HOLD')
                 raise KeyboardInterrupt
         return True
+
+    def do_set_margin(self, x):
+        self.margin = x
+        
+    def do_get_margin(self):
+        return self.margin
         
     def _check_last_pressed_key(self):
         last_key = ''
