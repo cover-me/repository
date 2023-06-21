@@ -7,11 +7,12 @@ import types
 import logging
 # import math
 
-class IPS_ethernet_20230529(Instrument):
+class IPS_ethernet_20230529_tritonxl(Instrument):
     MARGIN = 1e-3# T
     # PT1 8.3625 A/T,14 T
-    MAX_FIELD = 14
-    AtoB = 8.3625
+    # TritonXL 8.7399, 16
+    MAX_FIELD = 16
+    AtoB = 8.7399
     MAX_RATE = 0.2
 
     def __init__(self, name, address, term_chars = '\n'):
@@ -36,19 +37,13 @@ class IPS_ethernet_20230529(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T'}
             },
-            'temperature': 
-            {   
-                'get_cmd':'READ:DEV:MB1.T1:TEMP:SIG:TEMP',
-                'set_cmd':'',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
-            },
             'field': 
             {   
                 'get_cmd':'READ:DEV:GRPZ:PSU:SIG:FLD',
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T', 'minval':-self.MAX_FIELD, 'maxval':self.MAX_FIELD, 'format':'%.5f'}
             },
-            'rampRate': 
+            'field_rate': 
             {   
                 'get_cmd':'READ:DEV:GRPZ:PSU:SIG:RFST',
                 'set_cmd':'SET:DEV:GRPZ:PSU:SIG:RFST:%s',
@@ -146,7 +141,3 @@ class IPS_ethernet_20230529(Instrument):
            last_key = msvcrt.getch()
         if last_key == '\x05':#ctrl+e(xit)
             raise KeyboardInterrupt
-            
- 
-        
-
