@@ -4,12 +4,13 @@ from instrument import Instrument
 import visa
 import types
 import logging
+import qt
 
-class Keithley2450_20230524(Instrument):
+class Keithley2450_20230620(Instrument):
 
     def __init__(self, name, address):
         logging.info(__name__ + ' : Initializing instrument')
-        Instrument.__init__(self, name, tags=['physical'])
+        Instrument.__init__(self, name, tags=['smu'])
         print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
@@ -19,6 +20,12 @@ class Keithley2450_20230524(Instrument):
         self._add_source_depend_parameters()
         self._add_sense_depend_parameters()
         self.get_all()
+
+        self.add_function('continuous_measure')
+        self.add_function('auto_zero_once')
+        
+        qt.flow.connect('measurement-start', self._measurement_start_cb)
+        qt.flow.connect('measurement-end', self._measurement_end_cb)
 
     def _initialize_parameters(self):
         # Parameters that are class attributes
@@ -32,19 +39,19 @@ class Keithley2450_20230524(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
-            'switch_output': 
+            'output': 
             {   
                 'get_cmd':'OUTP?',
                 'set_cmd':'OUTP %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET,'format_map':{0:False,1:True}}
             },              
-            'mode_source': 
+            'source_mode': 
             {   
                 'get_cmd':'SOUR:FUNC?',
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET,'format_map':{'VOLT':'VOLT','CURR':'CURR'}}
             },
-            'mode_sense': 
+            'sense_mode': 
             {   
                 'get_cmd':'SENS:FUNC?',
                 'set_cmd':'',
@@ -96,41 +103,41 @@ class Keithley2450_20230524(Instrument):
                 'set_cmd':'SOUR:VOLT:ILIM %s',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'units':'A'}
             },            
-            'switch_source_autodelay_i': 
+            'source_autodelay_i': 
             {   
                 'get_cmd':'SOUR:CURR:DEL:AUTO?',
                 'set_cmd':'SOUR:CURR:DEL:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_source_autodelay_v': 
+            'source_autodelay_v': 
             {   
                 'get_cmd':'SOUR:VOLT:DEL:AUTO?',
                 'set_cmd':'SOUR:VOLT:DEL:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_source_autorange_i': 
+            'source_autorange_i': 
             {   
                 'get_cmd':'SOUR:CURR:RANG:AUTO?',
                 'set_cmd':'SOUR:CURR:RANG:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_source_autorange_v': 
+            'source_autorange_v': 
             {   
                 'get_cmd':'SOUR:VOLT:RANG:AUTO?',
                 'set_cmd':'SOUR:VOLT:RANG:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_source_readback_i': 
+            'source_readback_i': 
             {   
                 'get_cmd':'SOUR:CURR:READ:BACK?',
                 'set_cmd':'SOUR:CURR:READ:BACK %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_source_readback_v': 
+            'source_readback_v': 
             {   
                 'get_cmd':'SOUR:VOLT:READ:BACK?',
                 'set_cmd':'SOUR:VOLT:READ:BACK %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
             'source_delay_i': 
             {   
@@ -161,41 +168,41 @@ class Keithley2450_20230524(Instrument):
                 'set_cmd':'SENS:VOLT:RANG %s',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'units':'V'}
             }, 
-            'switch_autozero_i': 
+            'autozero_i': 
             {   
                 'get_cmd':'SENS:CURR:AZER?',
                 'set_cmd':'SENS:CURR:AZER %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_autozero_v': 
+            'autozero_v': 
             {   
                 'get_cmd':'SENS:VOLT:AZER?',
                 'set_cmd':'SENS:VOLT:AZER %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_sense_autorange_i': 
+            'sense_autorange_i': 
             {   
                 'get_cmd':'SENS:CURR:RANG:AUTO?',
                 'set_cmd':'SENS:CURR:RANG:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_sense_autorange_v': 
+            'sense_autorange_v': 
             {   
                 'get_cmd':'SENS:VOLT:RANG:AUTO?',
                 'set_cmd':'SENS:VOLT:RANG:AUTO %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_aver_filter_i': 
+            'filter_avg_i': 
             {   
                 'get_cmd':'SENS:CURR:AVER?',
                 'set_cmd':'SENS:CURR:AVER %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
-            'switch_aver_filter_v': 
+            'filter_avg_v': 
             {   
                 'get_cmd':'SENS:VOLT:AVER?',
                 'set_cmd':'SENS:VOLT:AVER %s',
-                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:"OFF",1:"ON"}}
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'format_map':{0:False,1:True}}
             },
             'sense_nplc_i': 
             {   
@@ -217,7 +224,7 @@ class Keithley2450_20230524(Instrument):
 
     def  _add_source_depend_parameters(self):
         
-        source_type = self.get_mode_source()
+        source_type = self.get_source_mode()
         s = {'VOLT':'_v','CURR':'_i'}[source_type]
         d = {}
 
@@ -230,7 +237,7 @@ class Keithley2450_20230524(Instrument):
         self._add_parameters_from_dict(d)
         
     def  _add_sense_depend_parameters(self):
-        sense_type = self.get_mode_sense()
+        sense_type = self.get_sense_mode()
         s = {'"VOLT:DC"':'_v','"CURR:DC"':'_i'}[sense_type]
         d = {}
 
@@ -242,12 +249,12 @@ class Keithley2450_20230524(Instrument):
        
         self._add_parameters_from_dict(d)
 
-    # def do_set_mode_source(self,val):
+    # def do_set_source_mode(self,val):
         # self._execute('SOUR:FUNC %s'%val)
         # self._on_source_type_change()
         # self.get_all()
 
-    # def do_set_mode_sense(self,val):
+    # def do_set_sense_mode(self,val):
         # self._execute('SENS:FUNC %s'%val)
         # self._on_sense_type_change()
         # self.get_all()
@@ -305,3 +312,15 @@ class Keithley2450_20230524(Instrument):
             return self._parse(ans,message)
         return None
 
+    def _measurement_start_cb(self, sender):
+        pass
+
+    def _measurement_end_cb(self, sender):
+        print "Kethley 2450: Set to continuously measure."
+        self.continuous_measure()
+
+    def continuous_measure(self):
+        self._execute('TRIGger:CONTinuous RESTart')
+
+    def auto_zero_once(self):
+        self._execute('AZER:ONCE')
