@@ -5,12 +5,11 @@ import types
 import logging
 import math
 
-class GS210_20230529(Instrument):
+class GS200_202306022(Instrument):
 
-    
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
-        Instrument.__init__(self, name, tags=['physical'])
+        Instrument.__init__(self, name, tags=['smu'])
         print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
@@ -39,14 +38,26 @@ class GS210_20230529(Instrument):
             'source_range': 
             {   
                 'get_cmd':':SOUR:RANG?',
-                'set_cmd':'',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET}
+                'set_cmd':':SOUR:RANG %s',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET}
             },
             'source_level': 
             {   
                 'get_cmd':'SOUR:LEV?',
                 'set_cmd':'SOUR:LEV %s',
-                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET, 'maxstep':0.005, 'stepdelay':30,}
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET, 'maxstep':0.01, 'stepdelay':30,}
+            },
+            'source_protection_current': 
+            {   
+                'get_cmd':':SOUR:PROT:CURR?',
+                'set_cmd':':SOUR:PROT:CURR %s',
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET, 'minval':1e-3, 'maxval':200e-3}
+            },
+            'measure': 
+            {   
+                'get_cmd':':SENSe?',
+                'set_cmd':':SENSe %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET,'format_map':{0:False,1:True}}
             },
         }
         
@@ -104,4 +115,3 @@ class GS210_20230529(Instrument):
     def get_all(self):
         for i in self.get_parameters():
             self.get(i)
-
