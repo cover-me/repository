@@ -6,7 +6,7 @@ import logging
 import math
 import msvcrt
 
-class tritonxl_20230607(Instrument):
+class tritonxl_20230625(Instrument):
     MARGIN = 5e-3# K
 
     def __init__(self, name, address,  term_chars = '\n'):
@@ -38,7 +38,7 @@ class tritonxl_20230607(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GET,'units':'K'}
             },
-            't_still': 
+            't_still':
             {   
                 'get_cmd':'READ:DEV:T3:TEMP:SIG:TEMP',
                 'set_cmd':'',
@@ -149,13 +149,13 @@ class tritonxl_20230607(Instrument):
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
             'pt2_water_out': 
-            {   
+            {
                 'get_cmd':'READ:DEV:C2:PTC:SIG:WOT',
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
         }
-        
+
         self._add_parameters()# add attribute_parameters and dict_parameters
 
     def _add_parameters(self):
@@ -170,7 +170,7 @@ class tritonxl_20230607(Instrument):
             self.add_parameter(para_name, flags=Instrument.FLAG_GET, type=types.StringType)
             
         self._add_parameters_from_dict(self.dict_parameters)
-        
+
     def _add_parameters_from_dict(self,para_dict):
         # Add other parameters
         for i in para_dict:
@@ -223,7 +223,7 @@ class tritonxl_20230607(Instrument):
         self._execute('SET:DEV:T12:TEMP:LOOP:TSET:%s'%val)
         if wait:
             try:
-                while abs(val - self.get_mc()) > self.MARGIN:
+                while abs(val - self.get_t_mc()) > self.MARGIN:
                     self._do_emit_changed()# update the GUI
                     self._check_last_pressed_key()
                     sleep(0.050)
