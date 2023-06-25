@@ -144,7 +144,7 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
         self.set_action('RTOS')# system would reset to "HOLD" once field reached
         if wait:
             try:
-                while abs(val - self.get_field()) > self.MARGIN:# or self.get_action() != 'HOLD':
+                while abs(val - self.get_field()) > self.MARGIN or self.get_action() != 'HOLD':
                     self._do_emit_changed()# update the GUI
                     self._check_last_pressed_key()
                     sleep(0.050)
