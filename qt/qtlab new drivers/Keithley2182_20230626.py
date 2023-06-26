@@ -8,7 +8,7 @@ import logging
 # import math
 import qt
 
-class Keithley2182_20230619(Instrument):
+class Keithley2182_20230626(Instrument):
     CHANGE_TRIGGER_SOURCE = True
     CHANGE_DISPLAY = True
 
@@ -161,7 +161,7 @@ class Keithley2182_20230619(Instrument):
             func = lambda attr_name=i: getattr(self,attr_name) 
             setattr(self, 'do_get_%s'%para_name, func)
             self.add_parameter(para_name, flags=Instrument.FLAG_GET, type=types.StringType)
-            
+
         self._add_parameters_from_dict(self.dict_parameters)
         
     def _add_parameters_from_dict(self,para_dict):
@@ -169,10 +169,10 @@ class Keithley2182_20230619(Instrument):
         for i in para_dict:
             # A virtual parameter
             if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
-                func = lambda : getattr(self,i)
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
                 
-                func = lambda x: setattr(self,i,x)
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
                 
                 self.add_parameter(i, **para_dict[i]['kw'])
