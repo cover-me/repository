@@ -82,7 +82,12 @@ class tritonxl_20230626(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'K'}
             },
-
+            't_mc_excitation': 
+            {   
+                'get_cmd':'READ:DEV:T12:TEMP:EXCT:MAG',
+                'set_cmd':'',
+                'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
+            },
             'loop_range': 
             {   
                 'get_cmd':'READ:DEV:T12:TEMP:LOOP:RANGE',
@@ -200,7 +205,7 @@ class tritonxl_20230626(Instrument):
                 self.add_parameter(i, **para_dict[i]['kw'])
 
     def close_session(self):
-        self._visainstrument.close() 
+        self._visainstrument.close()
 
     def _execute(self, message):
         ans = self._visainstrument.ask(message)
@@ -222,7 +227,7 @@ class tritonxl_20230626(Instrument):
         if message.endswith('TEMP:SIG:TEMP'):
             return ans[-1][:-1]
         elif message=='READ:DEV:T12:TEMP:LOOP:P:I:D':
-            ', '.join([ans[-5],ans[-3],ans[-1]])
+            return ', '.join([ans[-5],ans[-3],ans[-1]])
         elif message=='READ:DEV:T12:TEMP:LOOP:RANGE':
             return ans[-1][:-2]
         else:
