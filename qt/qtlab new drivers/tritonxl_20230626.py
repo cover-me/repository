@@ -1,3 +1,5 @@
+# https://github.com/cover-me/repository/tree/master/qt/qtlab%20new%20drivers
+
 from instrument import Instrument
 from time import time, sleep
 import visa
@@ -6,25 +8,27 @@ import logging
 import math
 import msvcrt
 
-class tritonxl_20230625(Instrument):
+class tritonxl_20230626(Instrument):
     MARGIN = 5e-3# K
 
-    def __init__(self, name, address,  term_chars = '\n'):
+    def __init__(self, name, address, term_chars = '\n', timeout=10):
         logging.debug(__name__ + ' : Initializing instrument')
-        Instrument.__init__(self, name, tags=['physical'])
+        Instrument.__init__(self, name, tags=['fridge'])
         print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
-        self._visainstrument = visa.instrument(self._address, term_chars = term_chars, timeout=10)
+        self._visainstrument = visa.instrument(self._address, term_chars = term_chars, timeout=timeout)
         self._visainstrument.clear()
         self._initialize_parameters()
-        self.set_margin(self.MARGIN)
         self.get_all()
+        # qt.flow.connect('measurement-start', self._measurement_start_cb)
+        # qt.flow.connect('measurement-end', self._measurement_end_cb)
         
     def _initialize_parameters(self):
         # Parameters that are class attributes
         self.attribute_parameters = ['_address', '__module__']
         
+        # type, flags, units, doc, minval, maxval, format_map
         self.dict_parameters = { 
             'ID':
             {
@@ -68,11 +72,8 @@ class tritonxl_20230625(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
             },
-            
             'margin':
             {
-                'get_cmd':'',
-                'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'K'}
             },
             't_mc': 
@@ -157,6 +158,7 @@ class tritonxl_20230625(Instrument):
         }
 
         self._add_parameters()# add attribute_parameters and dict_parameters
+        self.set_margin(self.MARGIN)
 
     def _add_parameters(self):
         '''
@@ -174,17 +176,28 @@ class tritonxl_20230625(Instrument):
     def _add_parameters_from_dict(self,para_dict):
         # Add other parameters
         for i in para_dict:
-            cmd = para_dict[i]['get_cmd']
-            if cmd:
-                func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
+            # A virtual parameter
+            if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
-            
-            cmd = para_dict[i]['set_cmd']
-            if cmd:
-                func = lambda x,cmd=cmd: self._execute(cmd%x)
+                
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
+                
+                self.add_parameter(i, **para_dict[i]['kw'])
+            # An instrument parameter
+            else:
+                cmd = para_dict[i]['get_cmd']
+                if cmd:
+                    func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
+                    setattr(self, 'do_get_%s'%i, func)
+                
+                cmd = para_dict[i]['set_cmd']
+                if cmd:
+                    func = lambda x,cmd=cmd: self._execute(cmd%x)
+                    setattr(self, 'do_set_%s'%i, func)
 
-            self.add_parameter(i, **para_dict[i]['kw'])
+                self.add_parameter(i, **para_dict[i]['kw'])
 
     def close_session(self):
         self._visainstrument.close() 
@@ -223,19 +236,13 @@ class tritonxl_20230625(Instrument):
         self._execute('SET:DEV:T12:TEMP:LOOP:TSET:%s'%val)
         if wait:
             try:
-                while abs(val - self.get_t_mc()) > self.MARGIN:
+                while abs(val - self.get_t_mc()) > self._margin:
                     self._do_emit_changed()# update the GUI
                     self._check_last_pressed_key()
                     sleep(0.050)
             except KeyboardInterrupt:
                 raise KeyboardInterrupt
         return True
-
-    def do_set_margin(self, x):
-        self.margin = x
-        
-    def do_get_margin(self):
-        return self.margin
         
     def _check_last_pressed_key(self):
         last_key = ''
@@ -243,3 +250,9 @@ class tritonxl_20230625(Instrument):
            last_key = msvcrt.getch()
         if last_key == '\x05':#ctrl+e(xit)
             raise KeyboardInterrupt
+            
+    # def _measurement_start_cb(self, sender):
+        # pass
+
+    # def _measurement_end_cb(self, sender):
+        # pass
