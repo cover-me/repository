@@ -8,8 +8,9 @@ import logging
 import math
 import msvcrt
 
-class IPS_ethernet_20230624_tritonxl(Instrument):
+class IPS_ethernet_20230625_tritonxl(Instrument):
     MARGIN = 1e-3# T
+    MARGIN_CHECK_ACTION = True
     # Check the power suppley settings
     # PT1 8.3625 A/T,14 T
     # TritonXL 8.7399 A/T, 16 T
@@ -33,6 +34,7 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
         # Parameters that are class attributes 
         self.attribute_parameters = ['_address', '__module__']
         
+        # type, flags, units, doc, minval, maxval, format_map
         self.dict_parameters = {
             'ID':
             {
@@ -43,6 +45,10 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
             'margin':
             {
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T'}
+            },
+            'margin_check_action':
+            {
+                'kw':{'type':types.BooleanType,'flags':Instrument.FLAG_GETSET}
             },
             'field': 
             {   
@@ -66,6 +72,7 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
         }
         self._add_parameters()# add attribute_parameters and dict_parameters
         self.set_margin(self.MARGIN)
+        self.set_margin_check_action(self.MARGIN_CHECK_ACTION)
    
     def _add_parameters(self):
         '''
@@ -85,10 +92,10 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
         for i in para_dict:
             # A virtual parameter
             if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
-                func = lambda : getattr(self,i)
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
                 
-                func = lambda x: setattr(self,i,x)
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
                 
                 self.add_parameter(i, **para_dict[i]['kw'])
@@ -144,7 +151,7 @@ class IPS_ethernet_20230624_tritonxl(Instrument):
         self.set_action('RTOS')# system would reset to "HOLD" once field reached
         if wait:
             try:
-                while abs(val - self.get_field()) > self.MARGIN or self.get_action() != 'HOLD':
+                while abs(val - self.get_field()) > self._margin or (self._margin_check_action and self.get_action() != 'HOLD'):
                     self._do_emit_changed()# update the GUI
                     self._check_last_pressed_key()
                     sleep(0.050)
