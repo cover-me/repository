@@ -23,6 +23,7 @@ class GS200_202306026(Instrument):
         # Parameters that are class attributes
         self.attribute_parameters = ['_address', '__module__']
         
+        # type, flags, units, doc, minval, maxval, format_map
         self.dict_parameters = { 
             'ID':
             {
@@ -33,8 +34,14 @@ class GS200_202306026(Instrument):
             'source_type': 
             {   
                 'get_cmd':'SOUR:FUNC?',
-                'set_cmd':':',
+                'set_cmd':'',
                 'kw':{'type':types.StringType,'flags':Instrument.FLAG_GET}
+            },
+            'output': 
+            {   
+                'get_cmd':'OUTPut?',
+                'set_cmd':'OUTPut %s',
+                'kw':{'type':types.IntType,'flags':Instrument.FLAG_GETSET,'format_map':{0:False,1:True}}
             },
             'source_range': 
             {   
