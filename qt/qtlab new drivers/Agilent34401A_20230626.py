@@ -1,14 +1,12 @@
 # https://github.com/cover-me/repository/tree/master/qt/qtlab%20new%20drivers
 
 from instrument import Instrument
-# from time import time, sleep
 import visa
 import types
 import logging
-# import math
 import qt
 
-class Agilent34401A_20230622(Instrument):
+class Agilent34401A_20230626(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -162,10 +160,10 @@ class Agilent34401A_20230622(Instrument):
         for i in para_dict:
             # A virtual parameter
             if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
-                func = lambda : getattr(self,i)
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
                 
-                func = lambda x: setattr(self,i,x)
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
                 
                 self.add_parameter(i, **para_dict[i]['kw'])
