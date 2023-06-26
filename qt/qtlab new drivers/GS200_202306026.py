@@ -1,11 +1,12 @@
+# https://github.com/cover-me/repository/tree/master/qt/qtlab%20new%20drivers
+
 from instrument import Instrument
-from time import time, sleep
 import visa
 import types
 import logging
-import math
+import qt
 
-class GS200_202306022(Instrument):
+class GS200_202306026(Instrument):
 
     def __init__(self, name, address):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -79,17 +80,28 @@ class GS200_202306022(Instrument):
     def _add_parameters_from_dict(self,para_dict):
         # Add other parameters
         for i in para_dict:
-            cmd = para_dict[i]['get_cmd']
-            if cmd:
-                func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
+            # A virtual parameter
+            if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
-            
-            cmd = para_dict[i]['set_cmd']
-            if cmd:
-                func = lambda x,cmd=cmd: self._execute(cmd%x)
+                
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
+                
+                self.add_parameter(i, **para_dict[i]['kw'])
+            # An instrument parameter
+            else:
+                cmd = para_dict[i]['get_cmd']
+                if cmd:
+                    func = lambda cmd=cmd,flag=0: self._query(cmd,flag)
+                    setattr(self, 'do_get_%s'%i, func)
+                
+                cmd = para_dict[i]['set_cmd']
+                if cmd:
+                    func = lambda x,cmd=cmd: self._execute(cmd%x)
+                    setattr(self, 'do_set_%s'%i, func)
 
-            self.add_parameter(i, **para_dict[i]['kw'])
+                self.add_parameter(i, **para_dict[i]['kw'])
 
     def close_session(self):
         self._visainstrument.close() 
@@ -115,3 +127,4 @@ class GS200_202306022(Instrument):
     def get_all(self):
         for i in self.get_parameters():
             self.get(i)
+
