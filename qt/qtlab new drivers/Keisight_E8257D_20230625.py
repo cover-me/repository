@@ -73,10 +73,10 @@ class Keisight_E8257D_20230625(Instrument):
         for i in para_dict:
             # A virtual parameter
             if 'get_cmd' not in para_dict[i] and 'set_cmd' not in para_dict[i]:
-                func = lambda : getattr(self,i)
+                func = lambda name='_%s'%i: getattr(self,name)
                 setattr(self, 'do_get_%s'%i, func)
                 
-                func = lambda x: setattr(self,i,x)
+                func = lambda x,name='_%s'%i: setattr(self,name,x)
                 setattr(self, 'do_set_%s'%i, func)
                 
                 self.add_parameter(i, **para_dict[i]['kw'])
