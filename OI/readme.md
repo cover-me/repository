@@ -3,7 +3,7 @@ This script runs with python 2. You can install python27, or download a portable
 ![image](https://user-images.githubusercontent.com/22870592/188307704-0bac3dc7-2562-4462-ab9f-5e28f00b614a.png)
 
 
-Configure file paths in the BAT file, VCL folder/email/webhook url/alert rules in the PY file, and double-click the BAT file to run (or PY file if python27 is registered in the operating system):
+Configure paths in .bat, VCL folder/email/webhook url/alert rules in config.py, and double-click the BAT file to run (or PY file if python27 is registered in the operating system):
 
 ![image](https://user-images.githubusercontent.com/22870592/188307143-53172023-e463-459c-820f-3b241a067b44.png)
 
