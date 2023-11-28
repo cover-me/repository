@@ -29,20 +29,23 @@ class alarmer():
         msg = ''
         status_changed = False
         for i in self.rules:
-            if i in data:
-                # rl: [0 lower_val,1 upper_val,2 lower_msg,3 upper_msg,4 status_is_above,5 delay_for_snapshot]
-                rl = self.rules[i]
-                print '%-20s\t%-10s\t%s\t%s'%(i,data[i],rl[0],rl[1]),
+            # rl: [0 lower_val,1 upper_val,2 lower_msg,3 upper_msg,4 status_is_above,5 delay_for_snapshot]
+            rl = self.rules[i]
+            data_name = i.split(':')[0]
+            if data_name in data:
+                val = data[data_name]
+                print '%-20s\t%-10s\t%s\t%s'%(i,val,rl[0],rl[1]),
                 status = rl[4]
-                if data[i] > rl[1]:
+                if val > rl[1]:
                     status = True
                     if rl[4] != status:
                         msg += rl[3] + '\n'
-                elif data[i] < rl[0]:
+                elif val < rl[0]:
                     status = False
                     if rl[4] != status:
                         msg += rl[2] + '\n'
-                print '\t+' if status else '\t-'
+                print '\t+' if status else '\t-',
+                print self.get_flag(rl)
                 if rl[4] != status:
                     rl[4] = status
                     status_changed = True
@@ -60,6 +63,12 @@ class alarmer():
         if 'Alarm' in msg:
             self.beep()
     
+    def get_flag(self,rule):
+        lower_msg = rule[2]
+        upper_msg = rule[3]
+        flag = '\t%d%d-%d%d-%d%d'%(lower_msg!='',upper_msg!='','Alarm' in lower_msg,'Alarm' in upper_msg,'snapshot' in lower_msg,'snapshot' in upper_msg)
+        return flag
+        
     def snap_shot(self,data,force=False):
         if force:
             msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
@@ -154,7 +163,7 @@ try:
         print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message. \nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
         print filename
         data = vr.get_newest_data()
-        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),data[1],'Name','PV','A1','A2','Status')# data[1] is the current line number
+        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),data[1],'Name','PV','A1','A2','Status','Enable1,2-Alarm1,2-Snapshot1,2')# data[1] is the current line number
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
