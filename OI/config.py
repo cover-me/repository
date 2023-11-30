@@ -22,13 +22,16 @@ snapshot_list = [i for i in labels if (i.endswith('T(K)')
 # dr200:512, triton:488, tritonXL:456 (see logging -> log file information for the file-size change)
 num = 488
 
-#[0 lower_val,1 upper_val,2 lower_msg,3 upper_msg,4 status (is_above),5 delay_for_snapshot in second]
+# [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
 # 5 can be empty, it is used only if a msg containing "Snapshot" is added to the queue
 rules = OrderedDict([
-    ("Output Water Temp",[27,29,'PT water out<27','Alarm! PT water out>29',True]),
+    ("Output Water Temp",[27,29,'PT water out<27','Alarm! PT water out>29',False]),
     ("Motor Current",[10,10.1,'Alarm! PT is off','PT is on',True]),
-    ("MC RuO2 T(K)",[0.05,20,'MC < 0.05 K. Will send the snapshot after 6 hours.','',True,3600*6]),
-    ("Magnet T(K)",[5,270,'Magnet < 5 K','Magnet > 270 K. Will send the snapshot after 6 hours.',True,3600*6]),
+    ("MC RuO2 T(K)",[0.05,10,'MC < 0.05 K. Snapshot will be sent in 2 hours.','',True,3600*2]),
+    ("Magnet T(K):1",[280,285,'','Magnet > 285 K. Snapshot will be sent in 2 hours.',True,3600*2]),
+    ("Magnet T(K):2",[5,10,'Magnet < 5 K','',True]),
+    ("Magnet T(K):3",[80,85,'Magnet < 80 K','Magnet > 85 K',True]),
+    #("Dewar (mbar)",[5e-3,1,'OVC < 5e-3 mbar','OVC > 1 mbar',True]),
 ])
 
 method = 'wechat'# wechat, slack, or email
