@@ -26,6 +26,7 @@ num = 488
 # 5 can be empty, it is used only if a msg containing "Snapshot" is added to the queue
 rules = OrderedDict([
     ("Output Water Temp",[27,29,'PT water out<27','Alarm! PT water out>29',False]),
+    ("Output Water Temp:2",[10,12,'Alarm! PT water out<10','',True]),
     ("Motor Current",[10,10.1,'Alarm! PT is off','PT is on',True]),
     ("MC RuO2 T(K)",[0.05,10,'MC < 0.05 K. Snapshot will be sent in 2 hours.','',True,3600*2]),
     ("Magnet T(K):1",[280,285,'','Magnet > 285 K. Snapshot will be sent in 2 hours.',True,3600*2]),
