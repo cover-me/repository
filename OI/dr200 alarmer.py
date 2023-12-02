@@ -20,7 +20,7 @@ class vcl_reader():
 class alarmer():
     def __init__(self):
         self.rules = config.rules
-        print self.rules
+        # print self.rules
         self.firsttime = True
         self.lastmsg = ''
         self.next_snapshot_time = None
@@ -54,9 +54,8 @@ class alarmer():
         if self.firsttime:
             status_changed = False
             self.firsttime = False
-        if status_changed:
+        if status_changed and msg.strip() != '':
             self.send('%s status changed'%config.fridge_name,msg)
-            self.adjust_volume_to_max()
         print self.lastmsg
         if 'Alarm' in msg:
             self.beep()
