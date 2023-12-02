@@ -1,6 +1,6 @@
 # Description
 
-This script send notifications when the status of an Oxford fridge changes. For Leiden fridges, see [FP_monitor.vi](https://github.com/cover-me/repository/tree/master/Leiden/1.0_190721_LV17).
+This script send notifications via Slack, email, or WeCom (WeChat Business) when the status of an Oxford fridge changes. For Leiden fridges, see [FP_monitor.vi](https://github.com/cover-me/repository/tree/master/Leiden/1.0_190721_LV17).
 
 Oxford fridge stores data in a VCL file. This file is updated every 1 minute (the interval can be modified). The script get values from the newest VCL file automatically found in the folder specified.
 
