@@ -23,7 +23,7 @@ class alarmer():
         # print self.rules
         self.firsttime = True
         self.lastmsg = ''
-        self.next_snapshot_time = None
+        self.next_snapshot_time = []
 
     def alarm(self,data):
         msg = ''
@@ -43,13 +43,13 @@ class alarmer():
                     status = False
                     if rl[4] != status:
                         msg += rl[2] + '\n'
-                print self.get_status_string(i,val,rl,status)
                 if rl[4] != status:
                     rl[4] = status
                     status_changed = True
-                if ('Snapshot' in msg) and (self.next_snapshot_time is None):
+                if 'Snapshot' in msg:
                     delay = rl[5]
-                    self.next_snapshot_time = time.time() + delay
+                    self.next_snapshot_time.append(time.time() + delay)
+                self.print_status(i,val,rl,status)
 
         if self.firsttime:
             status_changed = False
@@ -60,26 +60,34 @@ class alarmer():
         if 'Alarm' in msg:
             self.beep()
     
-    def get_status_string(self,rule_name,val,rule,status):
+    def print_status(self,rule_name,val,rule,status):
         val_low, val_high, msg_low, msg_high, status_init = rule[:5]
         if msg_low == '':
             val_low = '-'
         if msg_high == '':
             val_high = '-'
-        s = '%-20s\t%-10s\t%s\t%s'%(rule_name,val,val_low,val_high)
-        s += '\t+' if status else '\t-'
-        s += '\t%d%d-%d%d'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high)
-        return s
+        if (status==False and 'Alarm' in msg_low) or (status==True and 'Alarm' in msg_high):
+            color = 'red'
+        elif 'Alarm' in msg_low or 'Alarm' in msg_high:
+            color = 'green'
+        else:
+            color = 'white'
+
+        print '%-20s\t%-10s\t%s\t%s'%(rule_name,val,val_low,val_high),
+        self.print2('\t--->' if status else '\t<---',color)
+        print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
 
     def snap_shot(self,data,force=False):
         if force:
             msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
             self.send('%s snapshot [sent by someone manually]'%config.fridge_name,msg)
-        elif self.next_snapshot_time is not None and time.time() > self.next_snapshot_time:
-            msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
-            self.send('%s snapshot'%config.fridge_name,msg)
-            self.next_snapshot_time = None
-    
+        else:
+            t = time.time()
+            if any([t >= i for i in self.next_snapshot_time]):
+                msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
+                self.send('%s snapshot'%config.fridge_name,msg)
+                self.next_snapshot_time = [i for i in self.next_snapshot_time if t < i]
+
     def send_slack(self,title,msg):
         if msg:
             msg = '_%s_\n%s\n%s'%(title,time.strftime("%Y-%m-%d %H:%M:%S"),msg)
@@ -153,7 +161,18 @@ class alarmer():
             print 'Sent.'
         elif last_key == '\x05':#ctrl+e(xit)
             raise KeyboardInterrupt
-                 
+            
+            
+    def print2(self,s,style='',hold=False):
+        stylelist = {'black':'\033[30m','red':'\033[1;31m','green':'\033[32m','yellow':'\033[33m','blue':'\033[1;34m','magenta':'\033[35m','cyan':'\033[1;36m','white':'\033[37m',
+                    'reset':'\033[0m','bold':'\033[1m'
+                    }
+        post = '' if hold else '\033[0m'
+        if style in stylelist:
+            print('%s%s%s'%(stylelist[style],s,post)),
+        else:
+            print('%s%s%s'%(style,s,post)),
+
 folder = config.folder
 filename = folder+sorted(os.listdir(folder))[-1]
 vr = vcl_reader(filename)
