@@ -74,7 +74,7 @@ class alarmer():
             color = 'white'
 
         print '%-20s\t%-10s\t%s\t%s'%(rule_name,val,val_low,val_high),
-        self.print2('\t--->' if status else '\t<---',color)
+        print ('\t--->' if status else '\t<---'),
         print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
 
     def snap_shot(self,data,force=False):
