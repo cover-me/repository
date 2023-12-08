@@ -74,7 +74,7 @@ class alarmer():
         else:
             status_string = '\t->' if status else '\t<-'
 
-        print '%-20s\t%-10s\t%s\t%s'%(rule_name,val,val_low,val_high),
+        print '%-20s\t%-15s\t%s\t%s'%(rule_name,val,val_low,val_high),
         print status_string,
         print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
 
@@ -164,17 +164,30 @@ class alarmer():
             raise KeyboardInterrupt
 
 folder = config.folder
-filename = folder+sorted(os.listdir(folder))[-1]
-vr = vcl_reader(filename)
+
 alm = alarmer()
 timesleep = 61
+last_line_number = -1
+num_files_opened = 0
 try:
     while True:
         os.system('cls')
         print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message. Flag: Whether "Alarm" in message1/2, whether "Snapshot" in message1/2.\nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
-        print filename
+        
+        if last_line_number < 0:
+            filename = folder+sorted(os.listdir(folder))[-1]
+            vr = vcl_reader(filename)
+            num_files_opened += 1
+
+        print '%s. Counter: %s.'%(filename, num_files_opened)
         data = vr.get_newest_data()
-        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),data[1],'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number
+        line_number = data[1]
+        if last_line_number == line_number:
+            last_line_number = -1
+            next
+        else:
+            last_line_number = line_number
+        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
