@@ -1,4 +1,4 @@
-import os, time, struct, urllib2, json, smtplib, msvcrt
+import os, time, struct, urllib2, json, smtplib, msvcrt, datetime
 from collections import OrderedDict
 from email.mime.text import MIMEText
 import config
@@ -24,6 +24,7 @@ class alarmer():
         self.firsttime = True
         self.lastmsg = ''
         self.next_snapshot_time = []
+        self.next_snapshot_periodic = self.get_next_periodic()
 
     def alarm(self,data):
         msg = ''
@@ -81,13 +82,28 @@ class alarmer():
     def snap_shot(self,data,force=False):
         if force:
             msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
-            self.send('%s snapshot [sent by someone manually]'%config.fridge_name,msg)
+            self.send('%s snapshot [sent manually]'%config.fridge_name,msg)
         else:
             t = time.time()
             if any([t >= i for i in self.next_snapshot_time]):
                 msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
                 self.send('%s snapshot'%config.fridge_name,msg)
                 self.next_snapshot_time = [i for i in self.next_snapshot_time if t < i]
+                
+            if t > self.next_snapshot_periodic:
+                msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
+                self.send('%s snapshot [sent monthly]'%config.fridge_name,msg)
+                self.next_snapshot_periodic = self.get_next_periodic()
+                
+    def get_next_periodic(self):
+        dt = datetime.datetime.now()
+        dt_next = (dt.replace(day=1,hour=12,minute=0,second=0,microsecond=0) + datetime.timedelta(days=32)).replace(day=1)
+        ts_next = time.mktime(dt_next.timetuple())
+        return ts_next
+    
+    def get_next_snapshot_time(self):
+        ts = min(self.next_snapshot_time + [self.next_snapshot_periodic])
+        return datetime.datetime.fromtimestamp(ts)
 
     def send_slack(self,title,msg):
         if msg:
@@ -178,8 +194,9 @@ try:
             filename = folder+sorted(os.listdir(folder))[-1]
             vr = vcl_reader(filename)
             num_files_opened += 1
-
-        print '%s. Counter: %s.'%(filename, num_files_opened)
+            
+        print '%s. Counter: %s. Next snapshot time: %s.'%(filename, num_files_opened, alm.get_next_snapshot_time())
+        
         data = vr.get_newest_data()
         line_number = data[1]
         if last_line_number == line_number:
