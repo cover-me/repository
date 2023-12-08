@@ -47,7 +47,7 @@ class alarmer():
                 if rl[4] != status:
                     rl[4] = status
                     status_changed = True
-                if 'Snapshot' in msg:
+                if 'Snapshot' in msg and not self.firsttime:
                     delay = rl[5]
                     self.next_snapshot_time.append(time.time() + delay)
                 self.print_status(i,val,rl,status)
