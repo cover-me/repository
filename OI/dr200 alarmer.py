@@ -74,7 +74,7 @@ class alarmer():
         else:
             status_string = '\t->' if status else '\t<-'
 
-        print '%-20s\t%-15s\t%s\t%s'%(rule_name,val,val_low,val_high),
+        print '%-20s\t%-10g\t%s\t%s'%(rule_name,val,val_low,val_high),
         print status_string,
         print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
 
@@ -184,7 +184,7 @@ try:
         line_number = data[1]
         if last_line_number == line_number:
             last_line_number = -1
-            next
+            continue
         else:
             last_line_number = line_number
         print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number
