@@ -16,6 +16,22 @@ class vcl_reader():
         self.f.seek(-num,2)# 2 means seeking from the end
         data = struct.unpack('d'*(num/8),self.f.read(num))
         return data
+        
+class dat_reader_ppms():
+    def __init__(self,filename):
+        self.f = open(filename,'r')
+        self.labels = config.labels
+
+    def __del__(self):
+        self.f.close()
+        
+    def get_newest_data(self):
+        newline = self.f.readline().strip()
+        while newline:
+            lastline = newline
+            newline = self.f.readline().strip()
+        data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        return data
 
 class alarmer():
     def __init__(self):
@@ -75,7 +91,7 @@ class alarmer():
         else:
             status_string = '\t->' if status else '\t<-'
 
-        print '%-20s\t%-10g\t%s\t%s'%(rule_name,val,val_low,val_high),
+        print '%-25s\t%-10g\t%s\t%s'%(rule_name,val,val_low,val_high),
         print status_string,
         print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
 
@@ -183,7 +199,7 @@ folder = config.folder
 
 alm = alarmer()
 timesleep = 61
-last_line_number = -1
+last_line_number = -1# line number in oxford, timestamp in ppms.
 num_files_opened = 0
 try:
     while True:
@@ -191,8 +207,12 @@ try:
         print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message. Flag: Whether "Alarm" in message1/2, whether "Snapshot" in message1/2.\nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
         
         if last_line_number < 0:
-            filename = folder+sorted(os.listdir(folder))[-1]
-            vr = vcl_reader(filename)
+            # find the newest data file
+            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith('dat')]
+            paths_and_mtimes = [(i, os.path.getmtime(i)) for i in path_list]
+            paths_and_mtimes.sort(key=lambda x: x[1], reverse=True)
+            filename = paths_and_mtimes[0][0]
+            vr = dat_reader_ppms(filename)# chenge to dat_reader_ppms if for PPMS
             num_files_opened += 1
             
         print '%s. Counter: %s. Next snapshot time: %s.'%(filename, num_files_opened, alm.get_next_snapshot_time())
@@ -204,7 +224,7 @@ try:
             continue
         else:
             last_line_number = line_number
-        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number
+        print "\n%s\n\n#%d\n%-25s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number in oxford, timestamp in ppms.
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
