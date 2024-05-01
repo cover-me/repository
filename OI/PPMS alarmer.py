@@ -30,7 +30,10 @@ class dat_reader_ppms():
         while newline:
             lastline = newline
             newline = self.f.readline().strip()
-        data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        try: 
+            data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        except:
+            return [-1,-1]
         return data
 
 class alarmer():
@@ -219,7 +222,7 @@ try:
         
         data = vr.get_newest_data()
         line_number = data[1]
-        if last_line_number == line_number:
+        if line_number == -1:
             last_line_number = -1
             continue
         else:
