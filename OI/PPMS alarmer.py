@@ -144,6 +144,19 @@ class alarmer():
             req.add_header('Content-Type', 'application/json')
             response = urllib2.urlopen(req, data)
             self.lastmsg = '\n----------------\nMessage sent to Qi-Ye-Wei-Xin:\n%s'%msg + '\nResponse:\n' + response.read()
+            
+    def send_lark(self,title,msg):
+        if msg:
+            title_color = 'orange' if 'Alarm' in msg else 'black'
+            title = '<font color="%s">%s</font>'%(title_color,title)
+            body = {"tag": "div", "text": {"content": '%s\n<font color="grey">%s</font>\n%s'%(title,time.strftime("%Y-%m-%d %H:%M:%S"),msg), "tag": "lark_md"}}
+            data = json.dumps({"msg_type": "interactive", "card": {"elements": [body]}})
+
+            url = config.url
+            req = urllib2.Request(url)
+            req.add_header('Content-Type', 'application/json')
+            response = urllib2.urlopen(req, data)
+            self.lastmsg = '\n----------------\nMessage sent to lark:\n%s'%msg + '\nResponse:\n' + response.read()
 
     def send_email(self,title,msg):
         if msg:
@@ -171,7 +184,9 @@ class alarmer():
     
     def send(self,title,msg):
         if config.method == 'wechat':
-            self.send_wechat(title,msg)        
+            self.send_wechat(title,msg)
+        elif config.method == 'lark':
+            self.send_lark(title,msg)            
         elif config.method == 'slack':
             self.send_slack(title,msg)
         elif config.method == 'email':
