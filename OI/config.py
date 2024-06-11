@@ -39,7 +39,7 @@ rules = OrderedDict([
     #("Dewar (mbar)",[5e-3,1,'OVC < 5e-3 mbar','OVC > 1 mbar',True]),
 ])
 
-method = 'wechat'# wechat, slack, or email
+method = 'lark'# lark, wechat, slack, or email
 
 url = ''
 
