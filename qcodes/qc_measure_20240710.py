@@ -13,6 +13,16 @@ from qcodes.dataset.experiment_container import load_or_create_experiment
 from qcodes.dataset.measurements import Measurement
 from qcodes.instrument.parameter import Parameter
 
+def print_versions():
+    import qcodes_contrib_drivers, plottr, matplotlib, scipy
+    print('qcodes:', qc.__version__)
+    print('qcodes_contrib_drivers:', qcodes_contrib_drivers.__version__)
+    print('plottr:', plottr.__version__)
+    print('python:',sys.version)
+    print('matplotlib:', matplotlib.__version__)
+    print('numpy:', np.__version__)
+    print('scipy:', scipy.__version__)
+
 class DummyParameter(Parameter):
     def __init__(self, name, unit):
         super().__init__(name=name, unit=unit, label='Dummy Parameter',vals=qc.validators.Numbers(-1e6,1e6))
@@ -64,39 +74,39 @@ class QMeasure:
     def set_parameters_in_measurement_name(self, para_list=[]):
         self.meas_name_para = para_list
 
-    def generate_measurement_name(self, scan_direction='up'):
+    def generate_measurement_name(self, bwd=False, scan_direction='up'):
         # scan info x axis
         para = self.scan_para['x']['parameter']
+        label = f'{para.name} ({para.unit})' if para.unit else f'{para.name}'
         setpoints = self.scan_para['x']['setpoints']
         delay = self.scan_para['x']['delay']
-        direction = '-->' if scan_direction=='up' else '<--'
-        meas_name = f'x: {para.name}, {setpoints[0]} {direction} {setpoints[-1]}, pts: {len(setpoints)}, dly: {delay}\n'        
+        direction = '->' if scan_direction=='up' else '<-'
+        bwd_str = ', bwd=True' if bwd else ''
+        meas_name = f'X: {label}, {setpoints[0]} {direction} {setpoints[-1]}, pts: {len(setpoints)}, dly: {delay}{bwd_str}\n'        
 
         if self.scan_dim == 2:
-            para = self.scan_para['y']['parameter'] 
+            para = self.scan_para['y']['parameter']
+            label = f'{para.name} ({para.unit})' if para.unit else f'{para.name}'
             setpoints = self.scan_para['y']['setpoints']
             delay = self.scan_para['y']['delay']
-            direction = '-->'
-            meas_name += f'y: {para.name}, {setpoints[0]} {direction} {setpoints[-1]}, pts: {len(setpoints)}, dly: {delay}\n'
+            direction = '->'
+            meas_name += f'Y: {label}, {setpoints[0]} {direction} {setpoints[-1]}, pts: {len(setpoints)}, dly: {delay}\n'
 
         para_list = self.meas_name_para
-        meas_name += 'Parameters: ' + ', '.join([f'{i.name}: {i()}' for i in para_list]) + '. '
-
+        meas_name += 'Note: ['
+        for para in para_list:
+            label = f'{para.name} ({para.unit})' if para.unit else f'{para.name}'
+            meas_name += f'{label}: {para()}, '
+        meas_name = f'{meas_name[:-2]}], '
         para_list = self.monitor_para['list']
         meas_name += f"Aquire: [{', '.join([i.name for i in para_list])}]"
-        
-        if scan_direction=='up':
-            self.to_word(time.strftime('%m/%d %H:%M'))
-            self.to_word(f'\r\n{meas_name}')
-        else:
-            self.to_word(f'\r\nbwd=True')
 
         return meas_name
         
-    def _db_new_measure(self, scan_direction='up'):
+    def _db_new_measure(self, bwd=False, scan_direction='up'):
         exp = load_or_create_experiment(experiment_name=self.exp_name,
                                       sample_name=self.sample_name)
-        meas_name = self.generate_measurement_name(scan_direction)
+        meas_name = self.generate_measurement_name(bwd, scan_direction)
         meas = Measurement(exp=exp, name=meas_name)
         
         scan_para_list = [self.scan_para['x']['parameter'],self.scan_para['y']['parameter']]
@@ -112,9 +122,9 @@ class QMeasure:
         return meas
 
     def db_new_measure(self,bwd=False):
-        meas_list = [self._db_new_measure(scan_direction='up'),]
+        meas_list = [self._db_new_measure(bwd=bwd, scan_direction='up'),]
         if bwd:
-            meas_list.append(self._db_new_measure(scan_direction='down'))
+            meas_list.append(self._db_new_measure(bwd=bwd, scan_direction='down'))
         return meas_list
 
     def _scan1d(self, datasaver, list_x, y):
@@ -181,6 +191,15 @@ class QMeasure:
             datasaver_list = [stack.enter_context(meas.run()) for meas in meas_list]
             self.id_list = [i.run_id for i in datasaver_list]
             
+            
+            # timestamp
+            self.to_word(time.strftime(f'\n%m/%d %H:%M'),font_style=['blue','bold'])
+            # id, experiment name, sample name
+            id_str = ' and '.join([f'#{i}' for i in self.id_list])
+            self.to_word(f'{id_str}. Exp: {self.exp_name}. Sample: {self.sample_name}\n')
+            # measurement name
+            self.to_word(f'{meas_list[0].name}\n')
+            
             # start 2d scan
             # initialize 'z' (not exists) and y0, wait for 1 s
             t0 = time.time()
@@ -209,10 +228,12 @@ class QMeasure:
                     # reverse the list_x, if bwd=True go to next loop
                     if bwd:
                         list_x = list_x[::-1]
+            # scan finished
             t3 = time.time()
             time_str = f'{self.to_time_str(t0,t1,t2,t3)}'
             print(time_str)
-            self.to_word(f'\r\n{time_str}\r\n\r\n')
+
+            self.to_word(f'{time_str}\n')
             
             for ds in datasaver_list: 
                 ds.flush_data_to_database()
@@ -220,9 +241,8 @@ class QMeasure:
             if self.export_dat:
                 self._export_dat(dat_folder = f'DAT')
                 
-    def to_word(self, text, style_number=1):
+    def to_word(self, text, font_style=None):
         try:
-
             word = win32.Dispatch('word.application')
             doc_path = f'{qc.config.core.db_location[:-3]}.docx'
             if not os.path.isfile(doc_path):
@@ -235,18 +255,21 @@ class QMeasure:
             doc.Content.InsertAfter(text)
             # print(f"toWord: {text}")
             
-            if style_number != 1:
-                try:
-                    # numbers can be found on https://msdn.microsoft.com/en-us/library/bb237495(v=office.12).aspx
-                    rng = doc.Range(cend-1,cend-1+len(text))
-                    if style_number < -1:
-                        rng.Style = style_number
-                    elif style_number > 13:
-                        rng.Font.Size = style_number
-                    elif style_number == 0:
-                        rng.InlineShapes.AddHorizontalLineStandard()
-                except:
-                    pass
+            if font_style:
+                doc.Content.InsertAfter('\n')
+                r_start, r_end = cend-1,cend-1+len(text)
+                rng_text = doc.Range(r_start, r_end)
+                for i in font_style:
+                    # rng_temporary_space = doc.Range(r_end, r_end+1)
+                    if type(i) == int:
+                        rng_text.Font.Size = i
+                    elif i == 'bold':
+                        rng_text.Font.Bold = True
+                    elif i == 'blue':
+                        rng_text.Font.ColorIndex = 2
+                    elif i == 'red':
+                        rng_text.Font.ColorIndex = 6
+                    # rng_temporary_space.Text = ''
 
         except:
             print("toWord: Office WORD not available.")
@@ -386,7 +409,7 @@ Timestamp: {dataset.run_timestamp()}
             # if file not exists or file exists but overwrite is true
             with open(file_path, 'w') as f:
                 f.write(meta)
-                df.to_csv(f, sep='\t', float_format='%.12e', line_terminator='\n', index=False, header=False)
+                df.to_csv(f, sep='\t', float_format='%.12e', lineterminator='\n', index=False, header=False)
         else:
             print(f'File "{file_path}" already exists and has not been overwritten.')
         return file_path
