@@ -15,3 +15,5 @@ List of projects (not always up to date)
 - klayout
 
 - qt: qtlab and qtplot
+
+- qcodes
