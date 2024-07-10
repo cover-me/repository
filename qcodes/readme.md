@@ -2,7 +2,7 @@
 
 ## scan code test.ipynb 
 
-Example code.
+Example notebook.
 
 ## qc_measure.py
 
