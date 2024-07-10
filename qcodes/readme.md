@@ -6,7 +6,7 @@ Example code.
 
 ## qc_measure.py
 
-A package for general 1d and 2d scans using qcodes. A measurment log (DOCX file) and DAT data are generated aside to the qcodes db file, making your data and log available to more researchers. 
+A package for general 1d and 2d scans using qcodes. A measurment log (DOCX file) and DAT data are generated aside to the qcodes db file, making your data and log available to more researchers who are not familiar with DB stuffs. 
 
 ## qc_fast1d.py
 
