@@ -20,7 +20,7 @@ Change "lineterminator" to line_terminator in qc_measure.py if old pandas versio
 
 # To do:
 
-Make parameter readings parallel using threads.
+Make parameter readings parallel using threads. The function has already been implemented in qcodes' doNd functions.
 
 # Snapshots:
 
