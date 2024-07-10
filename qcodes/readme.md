@@ -18,6 +18,10 @@ Use Python 3.11 or higher. Time.sleep() may wait tens of milliseconds longer in 
 
 Change "lineterminator" to line_terminator in qc_measure.py if old pandas versions are installed. This parameter name changed.
 
+# To do:
+
+Make parameter readings parallel using threads.
+
 # Snapshots:
 
 Scan code (1d scan is a special kind of 2d scan, complicated measurements are availble by complicated "Parameters"):
