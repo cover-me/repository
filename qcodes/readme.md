@@ -32,3 +32,8 @@ Data files
 
 ![image](https://github.com/cover-me/repository/assets/22870592/befd7f58-30ca-405b-9be0-ba51bb51744f)
 
+
+Schematic diagram for fast scans
+
+
+![image](https://github.com/cover-me/repository/assets/22870592/7ab6313f-b254-418e-bd84-1b15bb4d6dae)
