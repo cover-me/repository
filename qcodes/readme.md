@@ -26,7 +26,9 @@ Make parameter readings parallel using threads. The function has already been im
 
 Scan code (1d scan is a special kind of 2d scan, complicated measurements are availble by complicated "Parameters"):
 
-![image](https://github.com/cover-me/repository/assets/22870592/92a26e2a-ef71-4ce6-bd96-8d94a572e546)
+
+![a](https://github.com/cover-me/repository/assets/22870592/0f2b6c36-21f9-4fc2-8a91-9f369de70fb6)
+
 
 Measurement log
 
