@@ -3,9 +3,12 @@ import contextlib
 import os
 import sys
 import time
+import socket
 import numpy as np
 from tqdm import tqdm
 import win32com.client as win32
+from shutil import copyfile, rmtree
+from tempfile import mkdtemp
 
 import qcodes as qc
 from qcodes.dataset.sqlite.database import initialise_or_create_database_at
@@ -36,11 +39,12 @@ class DummyParameter(Parameter):
         return self._val
 
 class QMeasure:
-    
-    def __init__(self, exp_name, sample_name, export_dat=True):
+
+    def __init__(self, exp_name, sample_name, export_dat=True, mute_qclient=False):
         self.exp_name = exp_name
         self.sample_name = sample_name
         self.export_dat = export_dat
+        self.mute_qclient = mute_qclient
       
         # x fast axis, y slow axis, for 2d scan
         self.scan_para = {'x':{},'y':{}}
@@ -108,9 +112,9 @@ class QMeasure:
                                       sample_name=self.sample_name)
         meas_name = self.generate_measurement_name(bwd, scan_direction)
         meas = Measurement(exp=exp, name=meas_name)
-        
+
         scan_para_list = [self.scan_para['x']['parameter'],self.scan_para['y']['parameter']]
-            
+
         for i in scan_para_list:
             meas.register_parameter(i)
         
@@ -137,8 +141,12 @@ class QMeasure:
             para_x(x)
             time.sleep(delay_x)
             val = [(p,p()) for p in parameters_to_fetch]
-            rslt = [(para_y, y), (para_x, x)] + val
+            rslt = [(para_x, x), (para_y, y)] + val
             datasaver.add_result(*rslt)
+
+            if self.is_fwd_now or self.scan_dim==1:
+                self.qclient.add_data([i[1] for i in rslt])
+                self.qclient.update_plot()
 
     def tqdm_x(self, a):
         if self.scan_dim == 1:
@@ -159,7 +167,8 @@ class QMeasure:
     def _export_dat(self, dat_folder):
         d2d = Db2Dat()
         for i in self.id_list:
-            d2d.to_dat(qc.config.core.db_location, i, dat_folder,overwrite=True)
+            last_dat_path = d2d.to_dat(qc.config.core.db_location, i, dat_folder,overwrite=True)
+        return last_dat_path
 
     def to_time_str(self, t0,t1,t2,t3):
         x = t3 - t0
@@ -190,8 +199,11 @@ class QMeasure:
         with contextlib.ExitStack() as stack:
             datasaver_list = [stack.enter_context(meas.run()) for meas in meas_list]
             self.id_list = [i.run_id for i in datasaver_list]
-            
-            
+
+            self.qclient = qtplot_client(self.mute_qclient)
+            self.qclient.init_temporary_file(datasaver_list[0].dataset,list_x,list_y)
+            self.qclient.update_plot()
+
             # timestamp
             self.to_word(time.strftime(f'\n%m/%d %H:%M'),font_style=['blue','bold'])
             # id, experiment name, sample name
@@ -200,46 +212,66 @@ class QMeasure:
             # measurement name
             self.to_word(f'{meas_list[0].name}\n')
             
-            # start 2d scan
-            # initialize 'z' (not exists) and y0, wait for 1 s
-            t0 = time.time()
-            if para_y:
-                para_y(list_y[0])
-                time.sleep(1)
-
-            for y in self.tqdm_y(list_y):
-                # Initialize y and x0, wait for delay_y seconds
+            
+            ##########################
+            ##### start 2d scan  #####
+            user_interrrupt = False
+            self.is_fwd_now = True
+            try:
+                # initialize 'z' (not exists) and y0, wait for 1 s
+                t0 = time.time()
                 if para_y:
-                    para_y(y)
-                para_x(list_x[0])
-                time.sleep(dly_y)
-                
-                # 1d scan. 2 scans if backward scan is ON
-                # No matter 1 or 2 scans, list_x will keep the same after the for loop
-                for ds in datasaver_list:
-                    try:
+                    para_y(list_y[0])
+                    time.sleep(1)
+
+                for y in self.tqdm_y(list_y):
+                    # Initialize y and x0, wait for delay_y seconds
+                    if para_y:
+                        para_y(y)
+                    para_x(list_x[0])
+                    time.sleep(dly_y)
+                    
+                    # 1d scan. 2 scans if backward scan is ON
+                    # No matter 1 or 2 scans, list_x will keep the same after the for loop
+                    for ds in datasaver_list:
+
                         t1 = time.time()
                         val_list = self._scan1d(ds, list_x, y)
                         t2 = time.time()
-                    except KeyboardInterrupt:
-                        print('Exit manually')
-                        sys.exit(0)
 
-                    # reverse the list_x, if bwd=True go to next loop
-                    if bwd:
-                        list_x = list_x[::-1]
-            # scan finished
-            t3 = time.time()
-            time_str = f'{self.to_time_str(t0,t1,t2,t3)}'
-            print(time_str)
+                        # will run 0 time or twice so values will be unchagned at last
+                        if bwd:
+                            list_x = list_x[::-1]
+                            if self.is_fwd_now and self.scan_dim==1:
+                                qclient_bwd = qtplot_client(self.mute_qclient)
+                                qclient_bwd.init_temporary_file(datasaver_list[1].dataset,list_x,list_y)
+                                qclient_bwd.update_plot()
+                                # close after update_plot() so temporary file is not occupied
+                                self.qclient.close()
+                                self.qclient = qclient_bwd
+                            self.is_fwd_now = not self.is_fwd_now
 
-            self.to_word(f'{time_str}\n')
-            
+                t3 = time.time()
+                time_str = f'{self.to_time_str(t0,t1,t2,t3)}'
+                print(time_str)
+                self.to_word(f'{time_str}\n')
+            except KeyboardInterrupt:
+                print('Exit manually')
+                user_interrrupt = True
+            ##### end 2d scan  #####
+            ########################
+
             for ds in datasaver_list: 
                 ds.flush_data_to_database()
 
             if self.export_dat:
-                self._export_dat(dat_folder = f'DAT')
+                last_dat_path = self._export_dat(dat_folder = f'DAT')
+                self.qclient.update_plot(last_dat_path)
+
+            self.qclient.close()
+
+            if user_interrrupt:
+                sys.exit()
                 
     def to_word(self, text, font_style=None):
         try:
@@ -400,11 +432,14 @@ Timestamp: {dataset.run_timestamp()}
             print(f'File "{file_path}" already exists and has not been overwritten.')
         return file_path
 
-    def export_dat_file(self, dataset,folder='',overwrite=False):
+    def export_dat_file(self,dataset,folder='',filename='',overwrite=False,force_size_list=None):
         df,size_list = self.dataset_to_dataframe(dataset)
+        if force_size_list:
+            size_list = force_size_list
         meta = self.get_dat_meta(dataset,df,size_list)
-        save_to_path = self.get_dat_filename(dataset)
-        file_path = os.path.join(folder,save_to_path)
+        if filename=='':
+            filename = self.get_dat_filename(dataset)
+        file_path = os.path.join(folder,filename)
         if (not os.path.isfile(file_path)) or overwrite:
             # if file not exists or file exists but overwrite is true
             with open(file_path, 'w') as f:
@@ -418,8 +453,97 @@ Timestamp: {dataset.run_timestamp()}
     def to_dat(self, db_path, exp_id, dat_folder='',overwrite=False, quiet=False):
         initialise_or_create_database_at(db_path)
         dataset = qc.load_by_id(exp_id)
-        dat_path = self.export_dat_file(dataset,dat_folder,overwrite)
+        dat_path = self.export_dat_file(dataset,dat_folder,'',overwrite)
         self.export_setting_file(dataset,dat_folder,overwrite)
         if not quiet:
             print(f'DAT and SET file saved: {dat_path[:-4]}')
         return dat_path
+        
+        
+# see also https://github.com/cover-me/repository/blob/master/qt/qtlab%20scan%20scripts/Qscan.230520.py
+class qtplot_client():
+    '''A client for real-time plotting in qtplot'''
+    def __init__(self,mute=False,interval=1):
+        self.mute = mute # mute the client or not
+        self.npy_path = ''
+        self.lastfile = ''
+        self.last_update_time = 0
+        self.mdata = None# mmap data which is plotted by qtplot
+        self.counter = 0# real-time row number
+        self.interval = interval# minimum refresh interval for qtplot
+
+    def _connect_qtplot(self):
+        try:
+            sckt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sckt.connect(('127.0.0.1',1787))
+            return sckt
+        except Exception:
+            return None
+
+    def init_temporary_file(self,dataset,x_pts,y_pts):         
+        if not self.mute:
+            sckt = self._connect_qtplot()
+            if sckt is None:
+                self.mute = True
+                print('Failed to reach qtplot. Mute the client.')
+            else:
+                sckt.close()
+                
+            nx, ny = len(x_pts), len(y_pts)
+            row = nx*ny
+            col = len(dataset.paramspecs)
+            
+            # Create a temporary NPY file for qtplot and use the mmap technique
+            temp_folder = mkdtemp()
+            self.npy_path = os.path.join(temp_folder, 'qtplot_temp.npy')
+            
+            # meta file is required since npy file doesn't contain metadata
+            d2d = Db2Dat()
+            d2d.export_dat_file(dataset,temp_folder,'qtplot_temp.meta.txt',overwrite=True,force_size_list=[nx,ny])
+            
+            # create the table and fill in X and Y columns
+            m = np.empty((row,col))*np.nan
+            X = np.tile(x_pts,ny)
+            Y = np.repeat(y_pts,nx)
+            W = np.vstack([X,Y])
+            m[:,:len(W)] = W.T
+
+            np.save(self.npy_path,m)
+            self.mdata = np.load(self.npy_path, mmap_mode='r+')
+
+    def add_data(self,values):
+        if not self.mute:
+            self.mdata[self.counter,:] = values
+            self.counter += 1
+
+    def _update_plot(self, filepath=''):
+        sckt = self._connect_qtplot()
+        if sckt is not None: 
+            if not filepath:
+                filepath = self.npy_path
+            if self.lastfile == filepath:
+                sckt.send(f'REFR:{filepath}'.encode('ascii'))
+            else:
+                self.lastfile = filepath
+                # sckt.send(f'FILE:{filepath};SHOW:'.encode('ascii'))
+                sckt.send(f'FILE:{filepath}'.encode('ascii'))
+                sckt.recv(128)
+            sckt.close()
+        else:
+            self.mute = True
+            print('Failed to reach qtplot. Mute the client.')
+            
+    def update_plot(self, filepath=''):
+        if not self.mute:
+            if filepath:
+                self._update_plot(os.path.abspath(filepath))
+            elif time.time()>(self.last_update_time+self.interval):
+                self.last_update_time = time.time()
+                self._update_plot()
+
+    def close(self):
+        if not self.mute:
+            self.mute = True
+        del self.mdata
+        if self.npy_path:
+            rmtree(os.path.split(self.npy_path)[0],ignore_errors=True)            
