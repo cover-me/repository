@@ -15,6 +15,7 @@ from qcodes.dataset.sqlite.database import initialise_or_create_database_at
 from qcodes.dataset.experiment_container import load_or_create_experiment
 from qcodes.dataset.measurements import Measurement
 from qcodes.instrument.parameter import Parameter
+from qcodes.dataset.threading import process_params_meas
 
 def print_versions():
     import qcodes_contrib_drivers, plottr, matplotlib, scipy
@@ -26,17 +27,9 @@ def print_versions():
     print('numpy:', np.__version__)
     print('scipy:', scipy.__version__)
 
-class DummyParameter(Parameter):
-    def __init__(self, name, unit):
-        super().__init__(name=name, unit=unit, label='Dummy Parameter',vals=qc.validators.Numbers(-1e6,1e6))
-        self._val = 0
-
-    def get_raw(self):
-        return self._val
-
-    def set_raw(self, val):
-        self._val = val
-        return self._val
+def DummyParameter(name, unit):
+    return Parameter(name=name, unit=unit, label='Dummy Parameter', set_cmd=None, get_cmd=None, initial_value=0)
+    
 
 class QMeasure:
 
@@ -134,20 +127,25 @@ class QMeasure:
     def _scan1d(self, datasaver, list_x, y):
         para_x = self.scan_para['x']['parameter']
         delay_x = self.scan_para['x']['delay']
-        parameters_to_fetch = self.monitor_para['list']
         para_y = self.scan_para['y']['parameter']
         
         for x in self.tqdm_x(list_x):
             para_x(x)
             time.sleep(delay_x)
-            val = [(p,p()) for p in parameters_to_fetch]
-            rslt = [(para_x, x), (para_y, y)] + val
+            vals = self._take_data()
+            rslt = [(para_x, x), (para_y, y)] + vals
             datasaver.add_result(*rslt)
 
             if self.is_fwd_now or self.scan_dim==1:
                 self.qclient.add_data([i[1] for i in rslt])
                 self.qclient.update_plot()
 
+    def _take_data(self):
+        parameters_to_fetch = self.monitor_para['list']
+        parallel = self.monitor_para['parallel']
+        vals = process_params_meas(parameters_to_fetch, use_threads=parallel)
+        return vals
+    
     def tqdm_x(self, a):
         if self.scan_dim == 1:
             # Will show a processbar for x dimension
