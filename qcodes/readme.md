@@ -6,13 +6,13 @@ Example notebook.
 
 ## qc_measure.py
 
-A package for general 1d and 2d scans using qcodes. A 1d scan is a special 2d scan. 
+A package for general 1d and 2d scans using qcodes. A 1d scan is a special 2d scan.
 
 - A measurment log (DOCX file) and DAT data are auto generated aside to the qcodes db file, making your data and log available to more researchers who are not familiar with database stuffs.
 
-- Integrated with qtplot for real time visualization (see snapshots below).
+- Integrated with qtplot for real time visualization (see snapshots below). For versions since 20240711.
 
-- Values from multiple instruments can be fetched in a parallel way (use threads).  
+- Values from multiple instruments can be fetched in a parallel way (use threads). For versions since 20240712.
 
 ## qc_fast1d.py
 
