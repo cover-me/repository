@@ -6,7 +6,13 @@ Example notebook.
 
 ## qc_measure.py
 
-A package for general 1d and 2d scans using qcodes. A measurment log (DOCX file) and DAT data are auto generated aside to the qcodes db file, making your data and log available to more researchers who are not familiar with database stuffs. 
+A package for general 1d and 2d scans using qcodes. A 1d scan is a special 2d scan. 
+
+- A measurment log (DOCX file) and DAT data are auto generated aside to the qcodes db file, making your data and log available to more researchers who are not familiar with database stuffs.
+
+- Integrated with qtplot for real time visualization (see snapshots below).
+
+- Values from multiple instruments can be fetched in a parallel way (use threads).  
 
 ## qc_fast1d.py
 
@@ -18,9 +24,6 @@ Use Python 3.11 or higher. Time.sleep() may wait tens of milliseconds longer in 
 
 Change "lineterminator" to line_terminator in qc_measure.py if old pandas versions are installed. This parameter name changed.
 
-# To do:
-
-Make parameter readings parallel using threads. The function has already been implemented in qcodes' doNd functions but default disabled.
 
 # Snapshots:
 
