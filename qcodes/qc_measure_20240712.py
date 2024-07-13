@@ -26,6 +26,7 @@ def print_versions():
     print('matplotlib:', matplotlib.__version__)
     print('numpy:', np.__version__)
     print('scipy:', scipy.__version__)
+    print('pandas:', pd.__version__)
 
 def DummyParameter(name, unit):
     return Parameter(name=name, unit=unit, label='Dummy Parameter', set_cmd=None, get_cmd=None, initial_value=0)
