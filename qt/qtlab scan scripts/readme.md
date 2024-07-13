@@ -200,6 +200,30 @@ e = easy_scan()
 # qt.instruments.get('magnetY')._ins.MARGIN=1e-3
 ```
 
+# Notes for qtlab measurement
+
+1. Under the "User Folder", create a new "Data Folder" for each cooldown.  
+   - The "User Folder" is similar to X:\UserData\[UserName], where X can be drive C or other drives. For convenience, it is recommended to use the last drive of the system.
+   - The suggested name for the "Data Folder": [Cooldown info] [Sample info] [User info], e.g., 20240707-105XL 20221222-InAs2DEGJJ15 UserName.
+
+3. Under the "Data Folder", create:
+   - A folder named "data" to store data files. Copy the address of the this subfolder, as it will be used in the scan script.
+   - A pptx document with a prefix the same as the "Data Folder" name, and a suffix if multiple ppt files are needed. This is used for discussion during the experiment.
+   - A docx document with a prefix the same as the "Data Folder" name, and a suffix if multiple doc files are needed. This is used for semi-automatic experiment logging, and analysis/discussion when the ppt cannot provide sufficient details. Open the docx file, select the "webview" in the bottom right corner, and the measurement code will automatically generate logs to this document.
+
+4. Open qtplot. The shortcut is usually on the desktop or in the desktop qtlab folder. The EXE is in the desktop qtlab/qt_plot folder.
+
+5. Edit and save 80_create_instruments.py to specify which instruments will be loaded. The file location is typically in the qtlab\init\ folder in the desktop qtlab folder. Comment instruments which are not needed, and uncomment instruments that are needed. You can also comment all instruments now and manually add/remove instruments later after running qtlab.
+
+6. Open qtlab. This will bring up a command line prompt and a GUI. The prompt is used to enter commands, and the GUI is used to view the loaded instrument parameters.
+
+7. Measurement:
+   - Load more instruments: You can add them line by line in the prompt, following the examples in 80_create_instruments.py. It's ok to add more instruments than necessary as long as they are connected to the computer.
+   - Modify instrument parameters: it is recommended to do this from the computer, using commands like lockin1.set_XXX(value). This ensures that the instrument settings in the software and the actual instrument settings are the same. If you modify the settings from an instrument directly, it is recommended to update the corresponding parameters in the software as well using commands, e.g., lockin1.get_all().
+   - Edit and save the scan script, which typically locates in the qtlab folder, like XXXscan.py. If you don't have your own measurment script, you can copy and rename someone else's. The measurement, no matter one-dimensional, two-dimensional, or even three-dimensional (not very useful), is done by e.scan(...).
+   - Run the scan script. In the command line, enter "run [path_to_scan_file]". You can use the up and down keys to view the history commands, and the tab key to autocomplete the commands. qtplot will visualize data in real-time. The word document will be automatically updated with measurement records, and you can manually insert figures from qtplot to the doc document (click "copy" and then "ctrl+v" to paste or click "to Word", simmilar to ppt files).
+  
+
 # Further reading
 
 Demos are available [here](https://cover-me.github.io/2019/03/31/qtplot-demo.html), may be a little out of date.
