@@ -115,8 +115,18 @@ class alarmer():
                 self.next_snapshot_periodic = self.get_next_periodic()
                 
     def get_next_periodic(self):
+        '''
+        Get next datetime for periodic notification
+        '''
         dt = datetime.datetime.now()
+        # 1st day of nextmonth
         dt_next = (dt.replace(day=1,hour=12,minute=0,second=0,microsecond=0) + datetime.timedelta(days=32)).replace(day=1)
+        
+        wdy = dt_next.weekday()
+        if wdy <= 1:
+            dt_next += datetime.timedelta(days=8-wdy)
+        else:
+            dt_next += datetime.timedelta(days=15-wdy)
         ts_next = time.mktime(dt_next.timetuple())
         return ts_next
     
