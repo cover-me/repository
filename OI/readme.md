@@ -1,6 +1,6 @@
 # Description
 
-A python2 script that sends notifications or summaries of an Oxford fridge status when the fridge status changes. Messages can be sent through email, Slack, Lark (Feishu), or WeCom (WeChat Business). Triggering events can be customized in the configuration file. For Leiden fridges, see [FP_monitor.vi](https://github.com/cover-me/repository/tree/master/Leiden/1.0_190721_LV17).
+A python2 script that sends notifications or summaries of an Oxford fridge (dr200 alarmer.py) or PPMS (PPMS alarmer.py) status when the fridge status changes. Messages can be sent through email, Slack, Lark (Feishu), or WeCom (WeChat Business). Triggering events can be customized in the configuration file. For Leiden fridges, see [FP_monitor.vi](https://github.com/cover-me/repository/tree/master/Leiden/1.0_190721_LV17).
 
 The Oxford fridge stores data in a VCL file. This file is updated every 1 minute (interval can be modified). The script reads values from the newest VCL file automatically found in a specified folder.
 
