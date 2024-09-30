@@ -443,7 +443,7 @@ Timestamp: {dataset.run_timestamp()}
             # if file not exists or file exists but overwrite is true
             with open(file_path, 'w') as f:
                 f.write(meta)
-                df.to_csv(f, sep='\t', float_format='%.12e', lineterminator='\n', index=False, header=False)
+                df.to_csv(f, sep='\t', float_format='%.12e', line_terminator='\n', index=False, header=False)
         else:
             print(f'File "{file_path}" already exists and has not been overwritten.')
         return file_path
@@ -501,7 +501,7 @@ class qtplot_client():
             d2d.export_dat_file(dataset,temp_folder,'qtplot_temp.meta.txt',overwrite=True,force_size_list=[nx,ny])
             
             # create the table and fill in X and Y columns
-            m = np.empty((row,col))*np.nan
+            m = np.full((row,col), np.nan)
             X = np.tile(x_pts,ny)
             Y = np.repeat(y_pts,nx)
             W = np.vstack([X,Y])
