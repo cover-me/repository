@@ -33,21 +33,23 @@ class alarmer():
             # rl: [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
             rl = self.rules[i]
             data_name = i.split(':')[0]
+            msg_new = ''
             if data_name in data:
                 val = data[data_name]
                 status = rl[4]
                 if val > rl[1]:
                     status = True
                     if rl[4] != status:
-                        msg += rl[3] + '\n'
+                        msg_new = rl[3] + '\n'
                 elif val < rl[0]:
                     status = False
                     if rl[4] != status:
-                        msg += rl[2] + '\n'
+                        msg_new = rl[2] + '\n'
+                msg += msg_new
                 if rl[4] != status:
                     rl[4] = status
                     status_changed = True
-                if 'Snapshot' in msg and not self.firsttime:
+                if 'Snapshot' in msg_new and len(rl)>5 and not self.firsttime:
                     delay = rl[5]
                     self.next_snapshot_time.append(time.time() + delay)
                 self.print_status(i,val,rl,status)
