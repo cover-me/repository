@@ -11,7 +11,7 @@ import time
 # Class methods are wrapped in qtlab, to use raw methods,
 # (for debugging), try xxx._ins.yyy
 
-class Basel_DACII_20241019(Instrument):
+class Basel_DACII_20241026(Instrument):
 
     def __init__(self, name, address, term_chars='\r\n'):
         logging.debug(__name__ + ' : Initializing instrument')
@@ -76,9 +76,45 @@ class Basel_DACII_20241019(Instrument):
                         'channels': ['%02d'%i for i in range(1,25)],
                         'units': 'V', 
                         'format': '%.06f',
-                        'maxstep': 0.5e-3, 
+                        'maxstep': 5e-3, 
                         'stepdelay':30,
                     }
+            },
+            'ch_output': 
+            {   
+                'get_cmd':'',
+                'set_cmd':'',
+                'kw':{
+                        'type': types.StringType,# FloatType, StringType, ...
+                        'flags': Instrument.FLAG_GETSET,# FLAG_GETSET, FLAG_GET, FLAG_SET
+                        'channels': ['%02d'%i for i in range(1,25)],
+                        # 'minval': 0.1,
+                        # 'maxval': 1000,
+                        # 'units': 'Hz',
+                        # 'maxstep': 0.5e-3,
+                        # 'stepdelay':30,# in ms
+                        'format_map': {'OFF':0,'ON':1},
+                        # 'format': '%.06f',
+                        # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
+                    },
+            },
+            'ch_bandwidth': 
+            {   
+                'get_cmd':'',
+                'set_cmd':'',
+                'kw':{
+                        'type': types.StringType,# FloatType, StringType, ...
+                        'flags': Instrument.FLAG_GETSET,# FLAG_GETSET, FLAG_GET, FLAG_SET
+                        'channels': ['%02d'%i for i in range(1,25)],
+                        # 'minval': 0.1,
+                        # 'maxval': 1000,
+                        'units': 'kHz',
+                        # 'maxstep': 0.5e-3,
+                        # 'stepdelay':30,# in ms
+                        'format_map': {'LBW':0.1,'HBW':100},
+                        # 'format': '%.06f',
+                        # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
+                    },
             },
             }
             
@@ -246,20 +282,22 @@ class Basel_DACII_20241019(Instrument):
         return hexstr     
         
     def do_get_ch(self, channel):
+        channel = int(channel)
         ans_hex = self._query('%s V?'%channel)
         return self.hex_to_voltage(ans_hex)
     
     def do_set_ch(self, val, channel):
+        channel = int(channel)
         val_hex = self.voltage_to_hex(val)
         self._execute('%s %s'%(channel,val_hex))
         
-    def get_chs_all(self):
+    def get_ch_all(self):
         base_name = 'ch'
         channels = self.DICT_PARA['ch']['kw']['channels']
         for i in channels:
             self.get('%s%s'%(base_name,i))   
         
-    def set_chs_all(self, val):
+    def set_ch_all(self, val):
         base_name = 'ch'
         channels = self.DICT_PARA['ch']['kw']['channels']
         for i in channels:
@@ -270,4 +308,20 @@ class Basel_DACII_20241019(Instrument):
         channels = self.DICT_PARA['ch']['kw']['channels']
         for i in channels:
             self.set_parameter_rate('%s%s'%(base_name,i), maxstep, stepdelay)
-  
+            
+    def do_get_ch_output(self, channel):
+        channel = int(channel)
+        return self._query('%s S?'%channel)
+    
+    def do_set_ch_output(self, val, channel):
+        channel = int(channel)
+        return self._execute('%s %s'%(channel,val))
+
+    def do_get_ch_bandwidth(self, channel):
+        channel = int(channel)
+        return self._query('%s BW?'%channel)
+    
+    def do_set_ch_bandwidth(self, val, channel):
+        channel = int(channel)
+        return self._execute('%s %s'%(channel,val))
+
