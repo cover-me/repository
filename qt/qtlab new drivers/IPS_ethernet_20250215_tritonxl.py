@@ -8,7 +8,7 @@ import logging
 import math
 import msvcrt
 
-class IPS_ethernet_20230625_tritonxl(Instrument):
+class IPS_ethernet_20250215_tritonxl(Instrument):
     MARGIN = 1e-3# T
     MARGIN_CHECK_ACTION = True
     # Check the power suppley settings
@@ -56,6 +56,10 @@ class IPS_ethernet_20230625_tritonxl(Instrument):
                 'set_cmd':'',
                 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T', 'minval':-self.MAX_FIELD, 'maxval':self.MAX_FIELD}
             },
+            'field_Target': 
+            {   
+                'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET,'units':'T', 'minval':-self.MAX_FIELD, 'maxval':self.MAX_FIELD}
+            },
             'field_rate': 
             {   
                 'get_cmd':'READ:DEV:GRPZ:PSU:SIG:RFST',
@@ -73,6 +77,7 @@ class IPS_ethernet_20230625_tritonxl(Instrument):
         self._add_parameters()# add attribute_parameters and dict_parameters
         self.set_margin(self.MARGIN)
         self.set_margin_check_action(self.MARGIN_CHECK_ACTION)
+        self.set_field_Target(self.get_field())
    
     def _add_parameters(self):
         '''
@@ -148,17 +153,20 @@ class IPS_ethernet_20230625_tritonxl(Instrument):
             
     def do_set_field(self,val,wait=True):
         self._execute('SET:DEV:GRPZ:PSU:SIG:FSET:%s'%val)
+        self.set_field_Target(val)
         self.set_action('RTOS')# system would reset to "HOLD" once field reached
         if wait:
             try:
                 while abs(val - self.get_field()) > self._margin or (self._margin_check_action and self.get_action() != 'HOLD'):
                     self._do_emit_changed()# update the GUI
                     self._check_last_pressed_key()
-                    sleep(0.050)
+                    sleep(0.05)
+                sleep(0.1)# without sleeping the instrument may drop the next field setting command
             except KeyboardInterrupt:
                 self.set_action('HOLD')
                 raise KeyboardInterrupt
         return True
+
 
     def _check_last_pressed_key(self):
         last_key = ''
