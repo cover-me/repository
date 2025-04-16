@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from collections import OrderedDict
 
 fridge_name = 'Top Loading'
@@ -13,6 +14,9 @@ labels = 'LineSize(bytes), LineNumber, Time(secs), P2 Condense (Bar), P1 Tank (B
 
 # Triton_XL, there are two Input/Output Water Temps (this model has two PTs), made the seconds to Input/Onput Water Temp2
 # labels = ['LineSize(bytes)', 'LineNumber', 'Time(secs)', 'P2 Condense (Bar)', 'P1 Tank (Bar)', 'P5 ForepumpBack (Bar)', 'P3 Still (mBar)', 'P4 TurboBack (mBar)', 'Dewar (mBar)', 'Input Water Temp', 'Output Water Temp', 'Oil Temp', 'Helium Temp', 'Motor Current', 'Low Pressure', 'High Pressure', 'PT2 Head T(K)', 'PT2 Head R(Ohm)', 'PT2 Plate T(K)', 'PT2 Plate R(Ohm)', 'Still Plate T(K)', 'Still Plate R(Ohm)', 'Cold Plate T(K)', 'Cold Plate R(Ohm)', 'MC Plate Cernox old T(K)', 'MC Plate Cernox old R(Ohm)', 'PT1 Head old T(K)', 'PT1 Head old R(Ohm)', 'PT1 Plate old T(K)', 'PT1 Plate old R(Ohm)', 'MC Plate RuO2 old T(K)', 'MC Plate RuO2 old R(Ohm)', 'MC Plate Cernox T(K)', 'MC Plate Cernox R(Ohm)', 'PT1 Head  T(K)', 'PT1 Head  R(Ohm)', 'PT1 Plate T(K)', 'PT1 Plate R(Ohm)', 'MC Plate RuO2 T(K)', 'MC Plate RuO2 R(Ohm)', 'Magnet T(K)', 'Magnet R(Ohm)', 'Still heater (W)', 'chamber heater (W)', 'IVC sorb heater (W)', 'Input Water Temp2', 'Output Water Temp2', 'Oil Temp2', 'Helium Temp2', 'Motor Current2', 'Low Pressure2', 'High Pressure2', 'turbo current(A)', 'turbo power(W)', 'turbo speed(Hz)', 'turbo motor(C)', 'turbo bottom(C)']
+
+# xs400
+# labels = 'LineNumber, Time Stamp, T1(K), T2(K), T3(K), T4(K), T51(K), T52(K), flow(ml/min), P1(bar), P2(bar), P3(mbar), P5(bar), Chamber(Pa)'.split(', ')
 
 # PPMS
 # labels = ['Comment','Time Stamp (sec)','Temperature (K)','Magnetic Field (Oe)','System Pres (Torr)','Chamber Status (code)','Temperature Status (code)','Field Status (code)','Cryostat Status (code)','Control Therm (ID)','Sample Therm (ID)','Block Temp (K)','Neck Temp (K)','High Neck Temp (K)','Control Temp (K)','1st Stage Temp (K)','2nd Stage Temp (K)','Magnet Temp (K)','Impedance Temp (K)','Pot Liquid level (%)','Block Power (W)','Neck Heater Power (W)','High Neck Heater Power (W)','1st Stage Heater Power (W)','2nd Stage Heater Power (W)','Magnet Voltage (V)','Impedance Heater Power (W)','Pot Power (W)','CFE Flow (SCCM)','Pump Flow (uncal SCCM)','Tank Pressure (Torr)','Annulus Pressure (Torr)','Compressor State (code)']
