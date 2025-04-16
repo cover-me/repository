@@ -1,7 +1,7 @@
-import os, time, struct, urllib2, json, smtplib, msvcrt, datetime
+import os, time, struct, urllib2, json, smtplib, msvcrt, datetime, config, zlib
 from collections import OrderedDict
 from email.mime.text import MIMEText
-import config
+import xml.etree.ElementTree as ET
 
 class vcl_reader():
     def __init__(self,filename):
@@ -35,7 +35,97 @@ class dat_reader_ppms():
         except:
             return [-1,-1]
         return data
+  
+class dat_reader_xls():
+    def __init__(self,filename):
+        self.f = open(filename,'r')
+        self.labels = config.labels
 
+    def __del__(self):
+        self.f.close()
+        
+    def get_newest_data(self):
+        newline = self.f.readline().strip()
+        while newline:
+            lastline = newline
+            newline = self.f.readline().strip()
+        try: 
+            data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        except:
+            return [-1,-1]
+        return data
+
+class xlsx_reader_xs():
+    def __init__(self,file_path):
+        self.last_data = None
+        self.file_path = file_path
+        self.labels = config.labels
+
+    # def __del__(self):
+        # pass
+        
+    def read_file_in_zip(self, zip_file_path, target_file_path):
+        with open(zip_file_path, 'rb') as zip_file:
+            zip_data = zip_file.read()
+        local_file_header_signature = '\x50\x4b\x03\x04'
+        central_directory_signature = '\x50\x4b\x01\x02'
+        offset = 0
+        while True:
+            local_header_index = zip_data.find(local_file_header_signature, offset)
+            if local_header_index == -1:
+                break
+            if central_directory_signature in zip_data[local_header_index:local_header_index + 10]:
+                break
+            file_name_length = struct.unpack('<H', zip_data[local_header_index + 26:local_header_index + 28])[0]
+            extra_field_length = struct.unpack('<H', zip_data[local_header_index + 28:local_header_index + 30])[0]
+            file_name = zip_data[local_header_index + 30:local_header_index + 30 + file_name_length]
+            if file_name == target_file_path:
+                data_start = local_header_index + 30 + file_name_length + extra_field_length
+                next_local_header = zip_data.find(local_file_header_signature, data_start)
+                if next_local_header == -1:
+                    data_end = len(zip_data)
+                else:
+                    data_end = next_local_header
+                file_data = zip_data[data_start:data_end]
+                return zlib.decompress(file_data,-15)
+            offset = local_header_index + 1
+
+        print "File not found"
+        return None
+    
+    def extract_last_row_data(self, xml_str):
+        root = ET.fromstring(xml_str)
+        prefix = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+        sheetdata = root.find(prefix+'sheetData')
+        row_elements = sheetdata.findall(prefix+'row')
+        
+        if len(row_elements)==1:
+            return None
+        last_row = row_elements[-1]
+        row_number = last_row.attrib['r']
+        data = [row_number]
+        for c_element in last_row.findall(prefix+'c'):
+            data_type = c_element.attrib['t']
+            if data_type == 'inlineStr':
+                t_element = c_element.find('.//%st'%prefix)
+                value = t_element.text
+            elif data_type == 'n':
+                v_element = c_element.find(prefix+'v')
+                value = float(v_element.text)
+            else:
+                value = None
+            data.append(value)
+        return data
+        
+    def get_newest_data(self):
+        target_file_path = "xl/worksheets/sheet1.xml"
+        file_content = self.read_file_in_zip(self.file_path, target_file_path)
+        data = self.extract_last_row_data(file_content)
+        if self.last_data == data:
+            return [-1, -1]
+        else:
+            return data
+        
 class alarmer():
     def __init__(self):
         self.rules = config.rules
@@ -226,7 +316,7 @@ class alarmer():
 folder = config.folder
 
 alm = alarmer()
-timesleep = 61
+timesleep = 301
 last_line_number = -1# line number in oxford, timestamp in ppms.
 num_files_opened = 0
 try:
@@ -236,23 +326,23 @@ try:
         
         if last_line_number < 0:
             # find the newest data file
-            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith('dat')]
+            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith('xlsx')]
             paths_and_mtimes = [(i, os.path.getmtime(i)) for i in path_list]
             paths_and_mtimes.sort(key=lambda x: x[1], reverse=True)
             filename = paths_and_mtimes[0][0]
-            vr = dat_reader_ppms(filename)# chenge to dat_reader_ppms if for PPMS
+            vr = xlsx_reader_xs(filename)# chenge to dat_reader_ppms if for PPMS
             num_files_opened += 1
             
         print '%s. Counter: %s. Next snapshot time: %s.'%(filename, num_files_opened, alm.get_next_snapshot_time())
         
         data = vr.get_newest_data()
-        line_number = data[1]
+        line_number = data[1]# data[1] is the current line number in oxford, timestamp in ppms or xs.
         if line_number == -1:
             last_line_number = -1
             continue
         else:
             last_line_number = line_number
-        print "\n%s\n\n#%d\n%-25s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number in oxford, timestamp in ppms.
+        print "\n%s\n\n#%s\n%-25s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
