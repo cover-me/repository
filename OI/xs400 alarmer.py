@@ -57,7 +57,7 @@ class dat_reader_xls():
 
 class xlsx_reader_xs():
     def __init__(self,file_path):
-        self.last_data = None
+        self.last_timestamp = -1
         self.file_path = file_path
         self.labels = config.labels
 
@@ -121,9 +121,10 @@ class xlsx_reader_xs():
         target_file_path = "xl/worksheets/sheet1.xml"
         file_content = self.read_file_in_zip(self.file_path, target_file_path)
         data = self.extract_last_row_data(file_content)
-        if self.last_data == data:
+        if self.last_timestamp == data[1]:
             return [-1, -1]
         else:
+            self.last_timestamp = data[1]
             return data
         
 class alarmer():
