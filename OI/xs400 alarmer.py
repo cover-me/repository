@@ -114,6 +114,8 @@ class xlsx_reader_xs():
                 value = float(v_element.text)
             else:
                 value = None
+            if value == 0:
+                value = float("nan")
             data.append(value)
         return data
         
@@ -139,18 +141,18 @@ class alarmer():
     def alarm(self,data):
         msg = ''
         status_changed = False
-        for i in self.rules:
+        for i in self.rules:# self.rules is a dictionary
             # rl: [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
             rl = self.rules[i]
             data_name = i.split(':')[0]
             if data_name in data:
                 val = data[data_name]
                 status = rl[4]
-                if val > rl[1]:
+                if val > rl[1]:# value is too high
                     status = True
                     if rl[4] != status:
                         msg += rl[3] + '\n'
-                elif val < rl[0]:
+                elif val < rl[0]:# value is too low
                     status = False
                     if rl[4] != status:
                         msg += rl[2] + '\n'
