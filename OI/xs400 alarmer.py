@@ -94,6 +94,8 @@ class xlsx_reader_xs():
         return None
     
     def extract_last_row_data(self, xml_str):
+        if not xml_str:
+            return [-1, -1]
         root = ET.fromstring(xml_str)
         prefix = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
         sheetdata = root.find(prefix+'sheetData')
