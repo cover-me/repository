@@ -15,7 +15,10 @@ class vcl_reader():
         num = config.num# number of bytes per row
         self.f.seek(-num,2)# 2 means seeking from the end
         data = struct.unpack('d'*(num/8),self.f.read(num))
-        return data
+        if data[0]==num and data[1]>0:
+            return data
+        else:
+            return [-1,-1]
         
 class dat_reader_ppms():
     def __init__(self,filename):
@@ -130,7 +133,7 @@ class xlsx_reader_xs():
         else:
             self.last_timestamp = data[1]
             return data
-        
+
 class alarmer():
     def __init__(self):
         self.rules = config.rules
@@ -153,14 +156,14 @@ class alarmer():
                 if val > rl[1]:# value is too high
                     status = True
                     if rl[4] != status:
-                        msg += rl[3] + '\n'
+                        msg += '%s Value: %s\n'%(rl[3],val)
+                        status_changed = True
                 elif val < rl[0]:# value is too low
                     status = False
                     if rl[4] != status:
-                        msg += rl[2] + '\n'
-                if rl[4] != status:
-                    rl[4] = status
-                    status_changed = True
+                        msg += '%s Value: %s\n'%(rl[2],val)
+                        status_changed = True
+                rl[4] = status
                 if 'Snapshot' in msg and not self.firsttime:
                     delay = rl[5]
                     self.next_snapshot_time.append(time.time() + delay)
@@ -249,7 +252,7 @@ class alarmer():
             req.add_header('Content-Type', 'application/json')
             response = urllib2.urlopen(req, data)
             self.lastmsg = '\n----------------\nMessage sent to Qi-Ye-Wei-Xin:\n%s'%msg + '\nResponse:\n' + response.read()
-            
+
     def send_lark(self,title,msg):
         if msg:
             title_color = 'orange' if 'Alarm' in msg else 'black'
@@ -291,7 +294,7 @@ class alarmer():
         if config.method == 'wechat':
             self.send_wechat(title,msg)
         elif config.method == 'lark':
-            self.send_lark(title,msg)            
+            self.send_lark(title,msg)
         elif config.method == 'slack':
             self.send_slack(title,msg)
         elif config.method == 'email':
