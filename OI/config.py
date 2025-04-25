@@ -3,6 +3,8 @@ from collections import OrderedDict
 
 fridge_name = 'Top Loading'
 folder = ''# folder of vcl files
+period = 61
+data_type= 'triton'
 
 # To find the labels, open a VCL file and search for "This is the standard comments block", keep replacing NUL NUL (\0) with NUL, then replace NUL with ', '  
 
@@ -33,13 +35,13 @@ num = 488
 # [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
 # 5 can be empty, it is used only if a msg containing "Snapshot" is added to the queue
 rules = OrderedDict([
-    ("Output Water Temp",[27,29,'PT water out<27','Alarm! PT water out>29',False]),
-    ("Output Water Temp:2",[10,12,'Alarm! PT water out<10','',True]),
-    ("Motor Current",[10,10.1,'Alarm! PT is off','PT is on',True]),
-    ("MC RuO2 T(K)",[0.05,10,'MC < 0.05 K. Snapshot will be sent in 2 hours.','',True,3600*2]),
-    ("Magnet T(K):1",[280,285,'','Magnet > 285 K. Snapshot will be sent in 2 hours.',True,3600*2]),
-    ("Magnet T(K):2",[5,10,'Magnet < 5 K','',True]),
-    ("Magnet T(K):3",[80,85,'Magnet < 80 K','Magnet > 85 K',True]),
+    ("Output Water Temp",[27,29,'PT water out<27.','Alarm! PT water out>29.',False]),
+    ("Output Water Temp:2",[10,12,'Alarm! PT water out<10.','',True]),
+    ("Motor Current",[10,10.1,'Alarm! PT is off.','PT is on.',True]),
+    ("MC RuO2 T(K)",[0.05,10,'Trigger: MC < 0.05 K (2 hrs ago).','',True,3600*2]),
+    ("Magnet T(K):1",[280,285,'','Trigger: Magnet > 285 K (2 hrs ago).',True,3600*2]),
+    ("Magnet T(K):2",[5,10,'Magnet < 5 K.','',True]),
+    ("Magnet T(K):3",[80,85,'Magnet < 80 K.','Magnet > 85 K.',True]),
     #("Dewar (mbar)",[5e-3,1,'OVC < 5e-3 mbar','OVC > 1 mbar',True]),
 ])
 
