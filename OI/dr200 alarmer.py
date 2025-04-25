@@ -1,7 +1,7 @@
-import os, time, struct, urllib2, json, smtplib, msvcrt, datetime
+import os, time, struct, urllib2, json, smtplib, msvcrt, datetime, config, zlib
 from collections import OrderedDict
 from email.mime.text import MIMEText
-import config
+import xml.etree.ElementTree as ET
 
 class vcl_reader():
     def __init__(self,filename):
@@ -15,7 +15,124 @@ class vcl_reader():
         num = config.num# number of bytes per row
         self.f.seek(-num,2)# 2 means seeking from the end
         data = struct.unpack('d'*(num/8),self.f.read(num))
+        if data[0]==num and data[1]>0:
+            return data
+        else:
+            return [-1,-1]
+        
+class dat_reader_ppms():
+    def __init__(self,filename):
+        self.f = open(filename,'r')
+        self.labels = config.labels
+
+    def __del__(self):
+        self.f.close()
+        
+    def get_newest_data(self):
+        newline = self.f.readline().strip()
+        while newline:
+            lastline = newline
+            newline = self.f.readline().strip()
+        try: 
+            data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        except:
+            return [-1,-1]
         return data
+  
+class dat_reader_xls():
+    def __init__(self,filename):
+        self.f = open(filename,'r')
+        self.labels = config.labels
+
+    def __del__(self):
+        self.f.close()
+        
+    def get_newest_data(self):
+        newline = self.f.readline().strip()
+        while newline:
+            lastline = newline
+            newline = self.f.readline().strip()
+        try: 
+            data = [float(i) if i else float("nan") for i in lastline.strip().split(',')]
+        except:
+            return [-1,-1]
+        return data
+
+class xlsx_reader_xs():
+    def __init__(self,file_path):
+        self.last_timestamp = -1
+        self.file_path = file_path
+        self.labels = config.labels
+
+    # def __del__(self):
+        # pass
+        
+    def read_file_in_zip(self, zip_file_path, target_file_path):
+        with open(zip_file_path, 'rb') as zip_file:
+            zip_data = zip_file.read()
+        local_file_header_signature = '\x50\x4b\x03\x04'
+        central_directory_signature = '\x50\x4b\x01\x02'
+        offset = 0
+        while True:
+            local_header_index = zip_data.find(local_file_header_signature, offset)
+            if local_header_index == -1:
+                break
+            if central_directory_signature in zip_data[local_header_index:local_header_index + 10]:
+                break
+            file_name_length = struct.unpack('<H', zip_data[local_header_index + 26:local_header_index + 28])[0]
+            extra_field_length = struct.unpack('<H', zip_data[local_header_index + 28:local_header_index + 30])[0]
+            file_name = zip_data[local_header_index + 30:local_header_index + 30 + file_name_length]
+            if file_name == target_file_path:
+                data_start = local_header_index + 30 + file_name_length + extra_field_length
+                next_local_header = zip_data.find(local_file_header_signature, data_start)
+                if next_local_header == -1:
+                    data_end = len(zip_data)
+                else:
+                    data_end = next_local_header
+                file_data = zip_data[data_start:data_end]
+                return zlib.decompress(file_data,-15)
+            offset = local_header_index + 1
+
+        print "File not found"
+        return None
+    
+    def extract_last_row_data(self, xml_str):
+        if not xml_str:
+            return [-1, -1]
+        root = ET.fromstring(xml_str)
+        prefix = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+        sheetdata = root.find(prefix+'sheetData')
+        row_elements = sheetdata.findall(prefix+'row')
+        
+        if len(row_elements)==1:
+            return None
+        last_row = row_elements[-1]
+        row_number = last_row.attrib['r']
+        data = [row_number]
+        for c_element in last_row.findall(prefix+'c'):
+            data_type = c_element.attrib['t']
+            if data_type == 'inlineStr':
+                t_element = c_element.find('.//%st'%prefix)
+                value = t_element.text
+            elif data_type == 'n':
+                v_element = c_element.find(prefix+'v')
+                value = float(v_element.text)
+            else:
+                value = None
+            if value == 0:
+                value = float("nan")
+            data.append(value)
+        return data
+        
+    def get_newest_data(self):
+        target_file_path = "xl/worksheets/sheet1.xml"
+        file_content = self.read_file_in_zip(self.file_path, target_file_path)
+        data = self.extract_last_row_data(file_content)
+        if self.last_timestamp == data[1]:
+            return [-1, -1]
+        else:
+            self.last_timestamp = data[1]
+            return data
 
 class alarmer():
     def __init__(self):
@@ -29,27 +146,25 @@ class alarmer():
     def alarm(self,data):
         msg = ''
         status_changed = False
-        for i in self.rules:
+        for i in self.rules:# self.rules is a dictionary
             # rl: [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
             rl = self.rules[i]
             data_name = i.split(':')[0]
-            msg_new = ''
             if data_name in data:
                 val = data[data_name]
                 status = rl[4]
-                if val > rl[1]:
+                if val > rl[1]:# value is too high
                     status = True
                     if rl[4] != status:
-                        msg_new = rl[3] + '\n'
-                elif val < rl[0]:
+                        msg += '%s Value: %s\n'%(rl[3],val)
+                        status_changed = True
+                elif val < rl[0]:# value is too low
                     status = False
                     if rl[4] != status:
-                        msg_new = rl[2] + '\n'
-                msg += msg_new
-                if rl[4] != status:
-                    rl[4] = status
-                    status_changed = True
-                if 'Snapshot' in msg_new and len(rl)>5 and not self.firsttime:
+                        msg += '%s Value: %s\n'%(rl[2],val)
+                        status_changed = True
+                rl[4] = status
+                if 'Snapshot' in msg and not self.firsttime:
                     delay = rl[5]
                     self.next_snapshot_time.append(time.time() + delay)
                 self.print_status(i,val,rl,status)
@@ -137,7 +252,7 @@ class alarmer():
             req.add_header('Content-Type', 'application/json')
             response = urllib2.urlopen(req, data)
             self.lastmsg = '\n----------------\nMessage sent to Qi-Ye-Wei-Xin:\n%s'%msg + '\nResponse:\n' + response.read()
-			
+
     def send_lark(self,title,msg):
         if msg:
             title_color = 'orange' if 'Alarm' in msg else 'black'
@@ -179,7 +294,7 @@ class alarmer():
         if config.method == 'wechat':
             self.send_wechat(title,msg)
         elif config.method == 'lark':
-            self.send_lark(title,msg)   			
+            self.send_lark(title,msg)
         elif config.method == 'slack':
             self.send_slack(title,msg)
         elif config.method == 'email':
@@ -210,7 +325,7 @@ folder = config.folder
 
 alm = alarmer()
 timesleep = 61
-last_line_number = -1
+last_line_number = -1# line number in oxford, timestamp in ppms.
 num_files_opened = 0
 try:
     while True:
@@ -218,20 +333,24 @@ try:
         print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message. Flag: Whether "Alarm" in message1/2, whether "Snapshot" in message1/2.\nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
         
         if last_line_number < 0:
-            filename = folder+sorted(os.listdir(folder))[-1]
+            # find the newest data file
+            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith('vcl')]
+            paths_and_mtimes = [(i, os.path.getmtime(i)) for i in path_list]
+            paths_and_mtimes.sort(key=lambda x: x[1], reverse=True)
+            filename = paths_and_mtimes[0][0]
             vr = vcl_reader(filename)
             num_files_opened += 1
             
         print '%s. Counter: %s. Next snapshot time: %s.'%(filename, num_files_opened, alm.get_next_snapshot_time())
         
         data = vr.get_newest_data()
-        line_number = data[1]
+        line_number = data[1]# data[1] is the current line number in oxford, timestamp in ppms or xs.
         if last_line_number == line_number:
             last_line_number = -1
             continue
         else:
             last_line_number = line_number
-        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')# data[1] is the current line number
+        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
