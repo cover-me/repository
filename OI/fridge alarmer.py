@@ -140,7 +140,8 @@ class alarmer():
         # print self.rules
         self.firsttime = True
         self.lastmsg = ''
-        self.next_snapshot_time = []
+        self.next_snapshot_time = None
+        self.next_snapshot_msg = ''
         self.next_snapshot_periodic = self.get_next_periodic()
 
     def alarm(self,data):
@@ -152,22 +153,28 @@ class alarmer():
             data_name = i.split(':')[0]
             if data_name in data:
                 val = data[data_name]
-                status = rl[4]
+                last_status = rl[4]
+                # note that both NaN > x and NaN < x return False, if val is NaN, status does not change
                 if val > rl[1]:# value is too high
                     status = True
-                    if rl[4] != status:
-                        msg += '%s Value: %s\n'%(rl[3],val)
+                    if last_status != status:
+                        msg_new = '%s Value: %s\n'%(rl[3],val)
                         status_changed = True
                 elif val < rl[0]:# value is too low
                     status = False
-                    if rl[4] != status:
-                        msg += '%s Value: %s\n'%(rl[2],val)
+                    if last_status != status:
+                        msg_new = '%s Value: %s\n'%(rl[2],val)
                         status_changed = True
-                rl[4] = status
-                if 'Snapshot' in msg and not self.firsttime:
-                    delay = rl[5]
-                    self.next_snapshot_time.append(time.time() + delay)
-                self.print_status(i,val,rl,status)
+                if status_changed:
+                    rl[4] = status
+                    if msg_new.startswith('Trigger') and len(rl)>5 and not self.firsttime:
+                        delay = rl[5]
+                        self.next_snapshot_time = time.time() + delay
+                        self.next_snapshot_msg = msg_new
+                    else:
+                        msg += msg_new
+
+                self.print_status(i,val,rl,rl[4])
 
         if self.firsttime:
             status_changed = False
@@ -192,9 +199,9 @@ class alarmer():
         else:
             status_string = '\t->' if status else '\t<-'
 
-        print '%-20s\t%-10g\t%s\t%s'%(rule_name,val,val_low,val_high),
+        print '%-25s\t%-10g\t%s\t%s'%(rule_name,val,val_low,val_high),
         print status_string,
-        print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Snapshot' in msg_low,'Snapshot' in msg_high),
+        print '\t%d%d-%d%d\n'%('Alarm' in msg_low,'Alarm' in msg_high,'Trigger' in msg_low,'Trigger' in msg_high),
 
     def snap_shot(self,data,force=False):
         if force:
@@ -202,10 +209,11 @@ class alarmer():
             self.send('%s snapshot [sent manually]'%config.fridge_name,msg)
         else:
             t = time.time()
-            if any([t >= i for i in self.next_snapshot_time]):
+            if self.next_snapshot_time is not None and t >= self.next_snapshot_time:
                 msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
+                msg = self.next_snapshot_msg + '\n' + msg
                 self.send('%s snapshot'%config.fridge_name,msg)
-                self.next_snapshot_time = [i for i in self.next_snapshot_time if t < i]
+                self.next_snapshot_time = None
                 
             if t > self.next_snapshot_periodic:
                 msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
@@ -229,7 +237,10 @@ class alarmer():
         return ts_next
     
     def get_next_snapshot_time(self):
-        ts = min(self.next_snapshot_time + [self.next_snapshot_periodic])
+        if self.next_snapshot_time is not None:
+            ts = min([self.next_snapshot_time, self.next_snapshot_periodic])
+        else:
+            ts = self.next_snapshot_periodic
         return datetime.datetime.fromtimestamp(ts)
 
     def send_slack(self,title,msg):
@@ -324,33 +335,47 @@ class alarmer():
 folder = config.folder
 
 alm = alarmer()
-timesleep = 61
+timesleep = config.period
 last_line_number = -1# line number in oxford, timestamp in ppms.
 num_files_opened = 0
+
+if config.data_type == 'xs400':
+    data_ext = 'xlsx'
+    data_reader = xlsx_reader_xs
+elif config.data_type == 'triton':
+    data_ext = 'vcl'
+    data_reader = vcl_reader
+elif config.data_type == 'ppms':
+    data_ext = 'dat'
+    data_reader = dat_reader_ppms
+
 try:
     while True:
         os.system('cls')
-        print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message. Flag: Whether "Alarm" in message1/2, whether "Snapshot" in message1/2.\nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
+        print '====================\n%s status monitor\n====================\n\npress ctrl + e to exit, ctrl + p to send a snapshot of the fridge status, ctrl + t to send a test message.\nFlag: Whether "Alarm" in message 1/2 - Whether triggering a snapshot for status 1/2.\nData is fetched every %s seconds from'%(config.fridge_name,timesleep),
         
         if last_line_number < 0:
             # find the newest data file
-            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith('vcl')]
+            path_list = [os.path.join(folder, i) for i in os.listdir(folder) if i.endswith(data_ext)]
             paths_and_mtimes = [(i, os.path.getmtime(i)) for i in path_list]
             paths_and_mtimes.sort(key=lambda x: x[1], reverse=True)
             filename = paths_and_mtimes[0][0]
-            vr = vcl_reader(filename)
+            vr = data_reader(filename)
             num_files_opened += 1
             
         print '%s. Counter: %s. Next snapshot time: %s.'%(filename, num_files_opened, alm.get_next_snapshot_time())
         
         data = vr.get_newest_data()
         line_number = data[1]# data[1] is the current line number in oxford, timestamp in ppms or xs.
-        if last_line_number == line_number:
+        if last_line_number == line_number or line_number==-1:
             last_line_number = -1
+            for i in range(timesleep):
+                alm._check_last_pressed_key(ptdata)
+                time.sleep(1)
             continue
-        else:
-            last_line_number = line_number
-        print "\n%s\n\n#%d\n%-20s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')
+        
+        last_line_number = line_number
+        print "\n%s\n\n#%s\n%-25s\t%-10s\t%s\t%s\t%s\t%s"%(time.strftime("%Y-%m-%d %H:%M:%S"),line_number,'Name','PV','A1','A2','Status','Flag')
         ptdata = OrderedDict(zip(vr.labels,data))
         alm.alarm(ptdata)
         alm.snap_shot(ptdata)
