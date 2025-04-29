@@ -154,6 +154,7 @@ class alarmer():
             if data_name in data:
                 val = data[data_name]
                 last_status = rl[4]
+                msg_new = ''
                 # note that both NaN > x and NaN < x return False, if val is NaN, status does not change
                 if val > rl[1]:# value is too high
                     status = True
@@ -165,7 +166,7 @@ class alarmer():
                     if last_status != status:
                         msg_new = '%s Value: %s\n'%(rl[2],val)
                         status_changed = True
-                if status_changed:
+                if msg_new:
                     rl[4] = status
                     if msg_new.startswith('Trigger') and len(rl)>5 and not self.firsttime:
                         delay = rl[5]
