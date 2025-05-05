@@ -104,8 +104,8 @@ class xlsx_reader_xs():
         sheetdata = root.find(prefix+'sheetData')
         row_elements = sheetdata.findall(prefix+'row')
         
-        if len(row_elements)==1:
-            return None
+        if len(row_elements)==0:
+            return [-1, -1]
         last_row = row_elements[-1]
         row_number = last_row.attrib['r']
         data = [row_number]
