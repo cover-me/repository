@@ -158,16 +158,20 @@ class alarmer():
                 # note that both NaN > x and NaN < x return False, if val is NaN, status does not change
                 if val > rl[1]:# value is too high
                     status = True
+                    if last_status != status:
+                        msg_new = rl[3]
+                        if msg_new:
+                            msg_new = '%s Value: %s\n'%(msg_new,val)
+                        status_changed = True
                 elif val < rl[0]:# value is too low
                     status = False
-                
-                if last_status != status:
-                    msg_new = rl[3] if status else rl[2]
-                    if msg_new:
-                        msg_new = '%s Value: %s\n'%(msg_new,val)
-                    status_changed = True
-                        
-                if msg_new:
+                    if last_status != status:
+                        msg_new = rl[2]
+                        if msg_new:
+                            msg_new = '%s Value: %s\n'%(msg_new,val)
+                        status_changed = True                
+
+                if status_changed:
                     rl[4] = status
                     if msg_new.startswith('Trigger') and len(rl)>5 and not self.firsttime:
                         delay = rl[5]
