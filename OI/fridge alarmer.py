@@ -146,7 +146,6 @@ class alarmer():
 
     def alarm(self,data):
         msg = ''
-        status_changed = False
         for i in self.rules:# self.rules is a dictionary
             # rl: [0 val_low,1 val_high,2 msg_low,3 msg_high,4 status_init,5 delay_snapshot]
             rl = self.rules[i]
@@ -155,44 +154,36 @@ class alarmer():
                 val = data[data_name]
                 last_status = rl[4]
                 msg_new = ''
+                
                 # note that both NaN > x and NaN < x return False, if val is NaN, status does not change
-                if val > rl[1]:# value is too high
-                    status = True
-                    if last_status != status:
-                        msg_new = rl[3]
-                        if msg_new:
-                            msg_new = '%s Value: %s\n'%(msg_new,val)
-                        status_changed = True
-                elif val < rl[0]:# value is too low
-                    status = False
-                    if last_status != status:
-                        msg_new = rl[2]
-                        if msg_new:
-                            msg_new = '%s Value: %s\n'%(msg_new,val)
-                        status_changed = True                
-
-                if status_changed:
+                if val > rl[1] or val < rl[0]:
+                    status = (val > rl[1])
                     rl[4] = status
-                    if msg_new.startswith('Trigger') and len(rl)>5 and not self.firsttime:
-                        delay = rl[5]
-                        self.next_snapshot_time = time.time() + delay
-                        self.next_snapshot_msg = msg_new
-                    else:
-                        msg += msg_new
 
-                self.print_status(i,val,rl,rl[4])
+                    if last_status != status:
+                        msg_new = rl[3] if status else rl[2]
+                        if msg_new:
+                            msg_new = '%s Value: %s\n'%(msg_new,val)
 
-        if self.firsttime:
-            status_changed = False
-            self.firsttime = False
-        if status_changed and msg.strip() != '':
+                    if not self.firsttime:
+                        if msg_new.startswith('Trigger') and len(rl)>5:
+                            delay = rl[5]
+                            self.next_snapshot_time = time.time() + delay
+                            self.next_snapshot_msg = msg_new
+                        else:
+                            msg += msg_new
+
+                self.print_status(i,val,rl)
+        
+        self.firsttime = False
+        if msg.strip() != '':
             self.send('%s status changed'%config.fridge_name,msg)
         print self.lastmsg
         if 'Alarm' in msg:
             self.beep()
     
-    def print_status(self,rule_name,val,rule,status):
-        val_low, val_high, msg_low, msg_high, status_init = rule[:5]
+    def print_status(self,rule_name,val,rule):
+        val_low, val_high, msg_low, msg_high, status = rule[:5]
         if msg_low == '':
             val_low = '-'
         if msg_high == '':
