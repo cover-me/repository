@@ -190,9 +190,7 @@ class alarmer():
             val_high = '-'
 
         if (status==False and 'Alarm' in msg_low) or (status==True and 'Alarm' in msg_high):
-            status_string = 'Alarm!!!'
-        elif 'Alarm' in msg_low or 'Alarm' in msg_high:
-            status_string = '\t--->' if status else '\t<---'
+            status_string = '\tAlarm!'
         else:
             status_string = '\t->' if status else '\t<-'
 
