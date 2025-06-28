@@ -158,14 +158,15 @@ class alarmer():
                 # note that both NaN > x and NaN < x return False, if val is NaN, status does not change
                 if val > rl[1]:# value is too high
                     status = True
-                    if last_status != status:
-                        msg_new = '%s Value: %s\n'%(rl[3],val)
-                        status_changed = True
                 elif val < rl[0]:# value is too low
                     status = False
-                    if last_status != status:
-                        msg_new = '%s Value: %s\n'%(rl[2],val)
-                        status_changed = True
+                
+                if last_status != status:
+                    msg_new = rl[3] if status else rl[2]
+                    if msg_new:
+                        msg_new = '%s Value: %s\n'%(msg_new,val)
+                    status_changed = True
+                        
                 if msg_new:
                     rl[4] = status
                     if msg_new.startswith('Trigger') and len(rl)>5 and not self.firsttime:
@@ -218,12 +219,13 @@ class alarmer():
                 
             if t > self.next_snapshot_periodic:
                 msg = '\n'.join(['%s: %s'%(i,data[i]) for i in config.snapshot_list])
-                self.send('%s snapshot [sent monthly]'%config.fridge_name,msg)
+                self.send('%s snapshot [Monthly 2nd Tuesday]'%config.fridge_name,msg)
                 self.next_snapshot_periodic = self.get_next_periodic()
                 
     def get_next_periodic(self):
         '''
         Get next datetime for periodic notification
+        Return datetime: 12:00 second Tuesday next month
         '''
         dt = datetime.datetime.now()
         # 1st day of nextmonth
