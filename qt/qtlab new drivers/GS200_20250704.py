@@ -6,15 +6,17 @@ import types
 import logging
 import qt
 
-class GS200_202306026(Instrument):
+class GS200_20250704(Instrument):
 
-    def __init__(self, name, address):
+    def __init__(self, name, address, term_chars=''):
         logging.debug(__name__ + ' : Initializing instrument')
         Instrument.__init__(self, name, tags=['smu'])
         print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
         self._visainstrument = visa.instrument(self._address)
+        if term_chars:
+            self._visainstrument.term_chars = term_chars
         self._visainstrument.clear()
         self._initialize_parameters()
         self.get_all()
