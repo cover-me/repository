@@ -46,7 +46,7 @@ class MPS10_LAN_20250703(Instrument):
         # General parameters
         # 'get_cmd' and 'set_cmd' can be the empty string to define corresponding functions manually (do_get_xxx and do_set_xxx),
         # or undeclared to create parameters that are attributes of the class
-        self.dict_parameters = {
+        self.DICT_PARA = {
             'ID':
             {
                 'get_cmd':'ID:0:5',
@@ -438,7 +438,7 @@ class MPS10_LAN_20250703(Instrument):
                 # 'kw':{'type':types.FloatType,'flags':Instrument.FLAG_GETSET|Instrument.FLAG_GET_AFTER_SET,'units':'V'}
             # },
         # }
-        # self.dict_parameters = self.DICT_PARA.copy()
+        self.dict_parameters = self.DICT_PARA.copy()
         
         self._add_parameters()# add attribute_parameters and dict_parameters
         # self._add_function_depend_parameters()# add parameters according the value of the parameter "function"
@@ -450,8 +450,8 @@ class MPS10_LAN_20250703(Instrument):
         self.set_remote_status(True)
    
     # def  _add_function_depend_parameters(self):
-        # function_type = self.get_source_func()
-        # s = {'VOLT':'_v','CURR':'_i'}[function_type]
+        # function_type = self.get_function()
+        # s = {'"VOLT"':'_v','"CURR"':'_i'}[function_type]
         # d = {}
 
         # for i in self.DICT_PARA_function:
