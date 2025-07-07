@@ -1,45 +1,43 @@
 # https://github.com/cover-me/repository/tree/master/qt/qtlab%20new%20drivers
 
 from instrument import Instrument
-import visa
-import types
-import logging
-import qt
-import time
+import types, time, visa, qt
 
-# The class name should be the same as the file name
+# Class name should be the same as the file name
 # Class methods are wrapped in qtlab, to use raw methods,
 # (for debugging), try xxx._ins.yyy
 
-class Keithley_6500_20241020(Instrument):
+# If "format" in dict_parameters does work, add "import types" in qtclient.py
+
+class Keithley_6500_20250707(Instrument):
 
     def __init__(self, name, address, term_chars=None):
-        logging.debug(__name__ + ' : Initializing instrument')
-        Instrument.__init__(self, name, tags=['dac'])
+        Instrument.__init__(self, name, tags=['dmm'])
         print '%-15s\t%-35s\t%-15s'%(name, address, self.__module__)
         
         self._address = address
-        self._visainstrument = visa.instrument(self._address, timeout=2)
-        self._visainstrument.term_chars = term_chars
-        self._visainstrument.clear()# clear readings in the buffer
+        self._connect(address, term_chars)
         self._initialize_parameters()
         self.get_all()
-        
-        # If you need actions before/after a measurment
         # qt.flow.connect('measurement-start', self._measurement_start_cb)
         # qt.flow.connect('measurement-end', self._measurement_end_cb)
+
+    #############################
+    #######  Parameters   #######
+    #############################
         
     def _initialize_parameters(self):
         # In qtlab, a value associated with a channel or setting is referred to as a 
         # "parameter" of an instrument. The value of a parameter can be retrieved or
-        # modified (if it is adjustable) using get_xxx and set_xxx functions.
+        # modified (if adjustable) through get_xxx and set_xxx functions.
         
-        # Parameters from attributes of the class
+        # Some of the class attributes are chosen as parameters
         self.attribute_parameters = ['_address', '__module__']
 
+        # General parameters
+        # 'get_cmd' and 'set_cmd' can be the empty string to define corresponding functions manually (do_get_xxx and do_set_xxx),
+        # or undeclared to create parameters that are attributes of the class
         self.DICT_PARA = { 
-            # get and set cmds can be left empty, to define corresponding functions manually (do_get_xxx and do_set_xxx).
-            
             'ID':
             {
                 'get_cmd':'*IDN?',
@@ -58,7 +56,6 @@ class Keithley_6500_20241020(Instrument):
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
             }, 
-
             'mode':
             {
                 'get_cmd':'FUNC?',
@@ -76,8 +73,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            },       
-                    
+            },
             'val':
             {
                 'get_cmd':':READ?',
@@ -95,8 +91,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            },   
-            
+            },
             'range':
             {
                 'get_cmd':'VOLT:RANG?',
@@ -114,8 +109,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            }, 
-
+            },
             'nplc':
             {
                 'get_cmd':'VOLT:NPLC?',
@@ -133,8 +127,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            },   
-
+            },
             'averaging':
             {
                 'get_cmd':'VOLT:AVER:STAT?',
@@ -152,8 +145,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            }, 
-            
+            },
             'autozero':
             {
                 'get_cmd':'VOLT:AZER:STAT?',
@@ -171,8 +163,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            }, 
-            
+            },
             'autorange':
             {
                 'get_cmd':'VOLT:RANG:AUTO?',
@@ -190,8 +181,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            }, 
-
+            },
             'averaging_count':
             {
                 'get_cmd':'VOLT:AVER:COUN?',
@@ -209,9 +199,7 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            },             
-            
-            
+            },
             'averaging_type':
             {
                 'get_cmd':'VOLT:AVER:TCON?',
@@ -229,11 +217,10 @@ class Keithley_6500_20241020(Instrument):
                         # 'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
-            }, 
-            
+            },
         }
             
-        # Which parameter to add depends on the value of the parameter "function" defined above.
+        # Special parameters whose visibility depends on the value of the parameter "function" defined above.
         # self.DICT_PARA_function = { 
             # 'range_i': 
             # {   
@@ -305,9 +292,22 @@ class Keithley_6500_20241020(Instrument):
 
                 self.add_parameter(i, **para_dict[i]['kw'])
 
+    def get_all(self):
+        for i in self.get_parameters():
+            self.get(i)
+            
+    #############################
+    ####### IO operations #######
+    #############################
+
+    def _connect(self, address, term_chars):
+        self._visainstrument = visa.instrument(self._address, timeout=2)
+        self._visainstrument.term_chars = term_chars
+        self._visainstrument.clear()# clear readings in the buffer
+        
     def close_session(self):
         self._visainstrument.close() 
-        
+         
     def _execute(self, message):
         return self._visainstrument.write(message)
         # self._visainstrument.read()
@@ -327,10 +327,15 @@ class Keithley_6500_20241020(Instrument):
     def _parse(self, ans, message):
         return ans
             
-    def get_all(self):
-        for i in self.get_parameters():
-            self.get(i)
-        
+    #############################
+    # Ovewrite get/set functions#
+    #############################
+
+
+    #############################
+    # Others                    #
+    #############################
+    
     # def _get_parameter_fast(self, name):
         # p = self.get_parameters()
         # if name in p:
@@ -347,27 +352,3 @@ class Keithley_6500_20241020(Instrument):
 
     # def _measurement_end_cb(self, sender):
         # pass
-        
-    # def _read_until_empty(self):
-        # ans = ''
-        # line = ''
-        # tout_old = self._visainstrument.timeout
-        # self._visainstrument.timeout = 0.3
-        
-        # while 1:
-            # try:
-                # line = self._visainstrument.read()
-                # ans += line + '\n'
-            # except:
-                # break
-                
-        # self._visainstrument.timeout = tout_old
-        # return ans
-    
-    # def _query_eager(self, message):
-        # self._visainstrument.write(message)
-        # return self._read_until_empty()
-    
-
-    # def do_get_ID(self):
-        # return "ID"
