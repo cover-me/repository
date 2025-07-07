@@ -277,7 +277,7 @@ class MPS10_LAN_20250703(Instrument):
                         # 'maxstep': 0.5e-3,
                         # 'stepdelay':30,# in ms
                         # 'format_map': {0:"OFF",1:"ON"},
-                        # 'format': '%.06f',
+                        'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     }, 
             },
@@ -295,7 +295,7 @@ class MPS10_LAN_20250703(Instrument):
                         # 'maxstep': 0.5e-3,
                         # 'stepdelay':30,# in ms
                         # 'format_map': {0:"OFF",1:"ON"},
-                        # 'format': '%.06f',
+                        'format': '%.06f',
                         # 'tags', 'doc', 'option_list', 'persist', 'probe_interval', listen_to
                     },
             },
