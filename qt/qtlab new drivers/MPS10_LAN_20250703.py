@@ -44,6 +44,8 @@ class MPS10_LAN_20250703(Instrument):
         self.attribute_parameters = ['_address', '__module__']
         
         # General parameters
+        # 'get_cmd' and 'set_cmd' can be the empty string to define corresponding functions manually (do_get_xxx and do_set_xxx),
+        # or undeclared to create parameters that are attributes of the class
         self.dict_parameters = {
             'ID':
             {
