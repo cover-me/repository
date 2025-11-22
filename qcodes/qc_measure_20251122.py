@@ -349,7 +349,13 @@ class Db2Dat:
 
 
     def dataset_to_dataframe(self, dataset):
-        df_dict = dataset.to_pandas_dataframe_dict()
+
+        para_names = [i for i in dataset.paramspecs]
+        tlevel_para_names_sorted = [i.name for i in dataset._rundescriber.interdeps.top_level_parameters]
+        tlevel_para_names_original = [i for i in para_names if i in tlevel_para_names_sorted]
+        # w/o providing *tlevel_para_names_original the returned dict will be sorted by name strings
+        df_dict = dataset.to_pandas_dataframe_dict(*tlevel_para_names_original)
+        
         if self.are_indexes_equal(df_dict):
             # combine multiple dataframes of parameters into one
             df = pd.concat(df_dict.values(), axis='columns')
@@ -443,7 +449,11 @@ Timestamp: {dataset.run_timestamp()}
             # if file not exists or file exists but overwrite is true
             with open(file_path, 'w') as f:
                 f.write(meta)
-                df.to_csv(f, sep='\t', float_format='%.12e', line_terminator='\n', index=False, header=False)
+                try:
+                    df.to_csv(f, sep='\t', float_format='%.12e', lineterminator='\n', index=False, header=False)
+                except:
+                    # for old pandas
+                    df.to_csv(f, sep='\t', float_format='%.12e', line_terminator='\n', index=False, header=False)
         else:
             print(f'File "{file_path}" already exists and has not been overwritten.')
         return file_path
@@ -545,4 +555,4 @@ class qtplot_client():
             self.mute = True
         del self.mdata
         if self.npy_path:
-            rmtree(os.path.split(self.npy_path)[0],ignore_errors=True)            
+            rmtree(os.path.split(self.npy_path)[0],ignore_errors=True)
